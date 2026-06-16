@@ -1720,9 +1720,13 @@ def build_figure_analysis_dataset(
         if not text:
             continue
 
+        image_paths = figure.get("image_paths") or []
+        figure_path = image_paths[0] if image_paths else ""
+
         dataset.append(
             {
                 "figure": figure_number_from_record(record),
+                "figure_path": figure_path,
                 "caption": caption,
                 "text": text,
             }
