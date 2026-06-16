@@ -1040,9 +1040,8 @@
       "figure_type": null,
       "xrd_score": 7.8,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/mn_zr/figures/fig_1.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_94d64e8f544b",
         "paragraph_b053ad0eee9c"
@@ -1073,9 +1072,8 @@
       "figure_type": null,
       "xrd_score": 4.0,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/mn_zr/figures/fig_2.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_20b01bd53ec3"
       ],
@@ -1102,9 +1100,8 @@
       "figure_type": null,
       "xrd_score": 20.0,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/mn_zr/figures/fig_3.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_5b19a1c43e99",
         "paragraph_b053ad0eee9c",
@@ -1149,6 +1146,7 @@
       "figure_type": null,
       "xrd_score": 7.5,
       "is_likely_xrd": true,
+      "is_caption_xrd": true,
       "image_paths": [
         "grobid_output/mn_zr/figures/fig_4.png"
       ],
@@ -1178,6 +1176,7 @@
       "figure_type": null,
       "xrd_score": 7.0,
       "is_likely_xrd": true,
+      "is_caption_xrd": true,
       "image_paths": [
         "grobid_output/mn_zr/figures/fig_5.png"
       ],
@@ -1207,6 +1206,7 @@
       "figure_type": null,
       "xrd_score": 7.0,
       "is_likely_xrd": true,
+      "is_caption_xrd": true,
       "image_paths": [
         "grobid_output/mn_zr/figures/fig_6.png"
       ],
@@ -1236,9 +1236,8 @@
       "figure_type": null,
       "xrd_score": 6.3,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/mn_zr/figures/fig_7.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_708d2c8911b8",
         "paragraph_8bc09d5bde1a"
@@ -1271,9 +1270,8 @@
       "figure_type": null,
       "xrd_score": 3.0,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/mn_zr/figures/fig_8.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_d4b906f60acb"
       ],
@@ -1300,9 +1298,8 @@
       "figure_type": null,
       "xrd_score": 2.5,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/mn_zr/figures/fig_9.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_8bc09d5bde1a"
       ],

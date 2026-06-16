@@ -36,13 +36,14 @@ Run the parser using the following format:
 
 ```bash
 python pdf_parser.py <pdf_path> --output <output_path>
+include '--xrd-figures-only' for xrd figures/analysis only
 ```
 
 ### Example
 
 ```bash
 python pdf_parser.py pdf_files/tio2_powder.pdf \
-  --output grobid_output/tio2_powder
+  --output grobid_output/tio2_powder --xrd-figures-only
 ```
 
 The parser will process the PDF using the local GROBID server and save the generated files to the specified output directory.

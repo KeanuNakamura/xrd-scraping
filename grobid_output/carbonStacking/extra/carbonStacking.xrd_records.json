@@ -19,6 +19,7 @@
       "figure_type": null,
       "xrd_score": 7.0,
       "is_likely_xrd": true,
+      "is_caption_xrd": true,
       "image_paths": [
         "grobid_output/carbonStacking/figures/fig_1.png"
       ],
@@ -38,48 +39,6 @@
       ]
     },
     "analysis_paragraphs": [
-      {
-        "paragraph_id": "paragraph_d02167acbfe0",
-        "text": "Prior to XRD analysis, the coal samples were stirred in 5 M HF for 24 h at ambient temperature to remove the peaks of mineral matters. The samples were then stirred in 5 M HCl for 24 h at ambient temperature and washed with pure water. In the previous study, we confirmed that the influence of the demineralization treatment on the stacking-structure parameters determined by the STAC-XRD was negligible [7] .",
-        "section_path": [
-          "XRD analysis"
-        ],
-        "section_type": "results",
-        "figure_references": [],
-        "xrd_score": 4.8,
-        "peak_positions": [],
-        "miller_indices": [],
-        "relevant_text": "Prior to XRD analysis, the coal samples were stirred in 5 M HF for 24 h at ambient temperature to remove the peaks of mineral matters. The samples were then stirred in 5 M HCl for 24 h at ambient temperature and washed with pure water. In the previous study, we confirmed that the influence of the demineralization treatment on the stacking-structure parameters determined by the STAC-XRD was negligible [7] .",
-        "selection_reason": "contextual_relevance"
-      },
-      {
-        "paragraph_id": "paragraph_b6149353f63f",
-        "text": "In STAC-XRD, the fraction of the stacking structure (P s ), the distribution of the number of aromatic layers in the stacking structure (distribution of N), and the average number of N (N ave ) were estimated by analysis of the intensity of the 002 peak of carbon. P s has been defined by Shiraishi [11] as the ratio of the number of carbon atoms in stacked structures to the number of carbon atoms in the entire sample. The distribution of N was calculated by a Fourier transform method [4] . The XRD profiles of the pulverized samples were measured using an X-ray diffractometer (Rigaku, Rotaflex RU-300) with Cu K a radiation by a step-scanning method in the range of 2qZ 10-418. After the XRD profiles were corrected with adsorption, polarization, and atomic scattering factors, the parameters with respect to the stacking structure were estimated. Details of the STAC-XRD method have been reported previously [6] .",
-        "section_path": [
-          "XRD analysis"
-        ],
-        "section_type": "results",
-        "figure_references": [],
-        "xrd_score": 4.8,
-        "peak_positions": [],
-        "miller_indices": [],
-        "relevant_text": "In STAC-XRD, the fraction of the stacking structure (P s ), the distribution of the number of aromatic layers in the stacking structure (distribution of N), and the average number of N (N ave ) were estimated by analysis of the intensity of the 002 peak of carbon. P s has been defined by Shiraishi [11] as the ratio of the number of carbon atoms in stacked structures to the number of carbon atoms in the entire sample. The distribution of N was calculated by a Fourier transform method [4] . The XRD profiles of the pulverized samples were measured using an X-ray diffractometer (Rigaku, Rotaflex RU-300) with Cu K a radiation by a step-scanning method in the range of 2qZ 10-418. After the XRD profiles were corrected with adsorption, polarization, and atomic scattering factors, the parameters with respect to the stacking structure were estimated. Details of the STAC-XRD method have been reported previously [6] .",
-        "selection_reason": "contextual_relevance"
-      },
-      {
-        "paragraph_id": "paragraph_1c8575d36e79",
-        "text": "The interlayer spacing of aromatic layers (d 002 ) in the samples was calculated from the peak position by means of Bragg's equation. The mean crystallite size along the c axis (L c ) was calculated from the width at the half maximum of the 002 peak using Scherrer's equation. The average number of N (N c ) was estimated from d 002 and L c by means of the following equation [10] :",
-        "section_path": [
-          "XRD analysis"
-        ],
-        "section_type": "results",
-        "figure_references": [],
-        "xrd_score": 3.6,
-        "peak_positions": [],
-        "miller_indices": [],
-        "relevant_text": "The interlayer spacing of aromatic layers (d 002 ) in the samples was calculated from the peak position by means of Bragg's equation. The mean crystallite size along the c axis (L c ) was calculated from the width at the half maximum of the 002 peak using Scherrer's equation. The average number of N (N c ) was estimated from d 002 and L c by means of the following equation [10] :",
-        "selection_reason": "contextual_relevance"
-      },
       {
         "paragraph_id": "paragraph_efd8f1103230",
         "text": "Fig. 1 shows the XRD profiles of the demineralized raw coals. The peak at 2qZ20-308 corresponds to the 002 reflection of carbon due to the stacking structure of aromatic layers. The broadening of the 002 peak for the brown coals can be attributed to the small dimensions of the crystallites perpendicular to the aromatic layers. The 002 peaks of the higher-rank coals are sharper than those of the brown coals. Furthermore, the peaks shift to a higher 2q value as the carbon content of the raw coals increases. Table 2 shows the d 002 , L c , and N c values for the raw coals. The parameter d 002 is a measure of the perfection in the stacking structure periodicity. The decrease in d 002 with increasing carbon content is related to the development of the stacking structure (d 002 for the graphite structure is 0.335 nm). However, assessing the stacking structure using only d 002 is difficult. The L c value indicates the thickness of the stacking structure along the c axis. The L c and N c values of the higher-rank coals were larger than those of the lower-rank coal.",
@@ -123,9 +82,8 @@
       "figure_type": null,
       "xrd_score": 2.5,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_3.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_7ef8757e6856"
       ],
@@ -142,34 +100,6 @@
       ]
     },
     "analysis_paragraphs": [
-      {
-        "paragraph_id": "paragraph_b6149353f63f",
-        "text": "In STAC-XRD, the fraction of the stacking structure (P s ), the distribution of the number of aromatic layers in the stacking structure (distribution of N), and the average number of N (N ave ) were estimated by analysis of the intensity of the 002 peak of carbon. P s has been defined by Shiraishi [11] as the ratio of the number of carbon atoms in stacked structures to the number of carbon atoms in the entire sample. The distribution of N was calculated by a Fourier transform method [4] . The XRD profiles of the pulverized samples were measured using an X-ray diffractometer (Rigaku, Rotaflex RU-300) with Cu K a radiation by a step-scanning method in the range of 2qZ 10-418. After the XRD profiles were corrected with adsorption, polarization, and atomic scattering factors, the parameters with respect to the stacking structure were estimated. Details of the STAC-XRD method have been reported previously [6] .",
-        "section_path": [
-          "XRD analysis"
-        ],
-        "section_type": "results",
-        "figure_references": [],
-        "xrd_score": 4.8,
-        "peak_positions": [],
-        "miller_indices": [],
-        "relevant_text": "In STAC-XRD, the fraction of the stacking structure (P s ), the distribution of the number of aromatic layers in the stacking structure (distribution of N), and the average number of N (N ave ) were estimated by analysis of the intensity of the 002 peak of carbon. P s has been defined by Shiraishi [11] as the ratio of the number of carbon atoms in stacked structures to the number of carbon atoms in the entire sample. The distribution of N was calculated by a Fourier transform method [4] . The XRD profiles of the pulverized samples were measured using an X-ray diffractometer (Rigaku, Rotaflex RU-300) with Cu K a radiation by a step-scanning method in the range of 2qZ 10-418. After the XRD profiles were corrected with adsorption, polarization, and atomic scattering factors, the parameters with respect to the stacking structure were estimated. Details of the STAC-XRD method have been reported previously [6] .",
-        "selection_reason": "contextual_relevance"
-      },
-      {
-        "paragraph_id": "paragraph_1c8575d36e79",
-        "text": "The interlayer spacing of aromatic layers (d 002 ) in the samples was calculated from the peak position by means of Bragg's equation. The mean crystallite size along the c axis (L c ) was calculated from the width at the half maximum of the 002 peak using Scherrer's equation. The average number of N (N c ) was estimated from d 002 and L c by means of the following equation [10] :",
-        "section_path": [
-          "XRD analysis"
-        ],
-        "section_type": "results",
-        "figure_references": [],
-        "xrd_score": 3.6,
-        "peak_positions": [],
-        "miller_indices": [],
-        "relevant_text": "The interlayer spacing of aromatic layers (d 002 ) in the samples was calculated from the peak position by means of Bragg's equation. The mean crystallite size along the c axis (L c ) was calculated from the width at the half maximum of the 002 peak using Scherrer's equation. The average number of N (N c ) was estimated from d 002 and L c by means of the following equation [10] :",
-        "selection_reason": "contextual_relevance"
-      },
       {
         "paragraph_id": "paragraph_7ef8757e6856",
         "text": "The P s values increased linearly with increasing carbon content (Fig. 2 ). Fig. 3 shows the distribution of the number (N) of aromatic layers in raw coals. The distributions of N for the FO and BS coals did not differ significantly: in both of these coals, more than 70% of the stacking structure consisted of two layers. In the NL and HE coals, the proportion of two-layer structure decreased, and that of the three to five-layer structure increased, relative to the values for the FO, BS, MI, and EB coals. Fig. 4 shows the N ave values for the raw coals calculated from the distribution of N. The value for the lower-rank coals with carbon contents of less than 72 wt% was approximately 2.2. For coals with a carbon content more than 81 wt%, the N ave values increased with increasing carbon content. This pattern indicates that the stacking structure of the aromatic layers in the higherrank coals (carbon content O81 wt%) differs from that in the brown coals.",
@@ -215,9 +145,8 @@
       "figure_type": null,
       "xrd_score": 4.0,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_4.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_7ef8757e6856",
         "paragraph_23efbe22a68a"
@@ -236,34 +165,6 @@
       ]
     },
     "analysis_paragraphs": [
-      {
-        "paragraph_id": "paragraph_b6149353f63f",
-        "text": "In STAC-XRD, the fraction of the stacking structure (P s ), the distribution of the number of aromatic layers in the stacking structure (distribution of N), and the average number of N (N ave ) were estimated by analysis of the intensity of the 002 peak of carbon. P s has been defined by Shiraishi [11] as the ratio of the number of carbon atoms in stacked structures to the number of carbon atoms in the entire sample. The distribution of N was calculated by a Fourier transform method [4] . The XRD profiles of the pulverized samples were measured using an X-ray diffractometer (Rigaku, Rotaflex RU-300) with Cu K a radiation by a step-scanning method in the range of 2qZ 10-418. After the XRD profiles were corrected with adsorption, polarization, and atomic scattering factors, the parameters with respect to the stacking structure were estimated. Details of the STAC-XRD method have been reported previously [6] .",
-        "section_path": [
-          "XRD analysis"
-        ],
-        "section_type": "results",
-        "figure_references": [],
-        "xrd_score": 4.8,
-        "peak_positions": [],
-        "miller_indices": [],
-        "relevant_text": "In STAC-XRD, the fraction of the stacking structure (P s ), the distribution of the number of aromatic layers in the stacking structure (distribution of N), and the average number of N (N ave ) were estimated by analysis of the intensity of the 002 peak of carbon. P s has been defined by Shiraishi [11] as the ratio of the number of carbon atoms in stacked structures to the number of carbon atoms in the entire sample. The distribution of N was calculated by a Fourier transform method [4] . The XRD profiles of the pulverized samples were measured using an X-ray diffractometer (Rigaku, Rotaflex RU-300) with Cu K a radiation by a step-scanning method in the range of 2qZ 10-418. After the XRD profiles were corrected with adsorption, polarization, and atomic scattering factors, the parameters with respect to the stacking structure were estimated. Details of the STAC-XRD method have been reported previously [6] .",
-        "selection_reason": "contextual_relevance"
-      },
-      {
-        "paragraph_id": "paragraph_1c8575d36e79",
-        "text": "The interlayer spacing of aromatic layers (d 002 ) in the samples was calculated from the peak position by means of Bragg's equation. The mean crystallite size along the c axis (L c ) was calculated from the width at the half maximum of the 002 peak using Scherrer's equation. The average number of N (N c ) was estimated from d 002 and L c by means of the following equation [10] :",
-        "section_path": [
-          "XRD analysis"
-        ],
-        "section_type": "results",
-        "figure_references": [],
-        "xrd_score": 3.6,
-        "peak_positions": [],
-        "miller_indices": [],
-        "relevant_text": "The interlayer spacing of aromatic layers (d 002 ) in the samples was calculated from the peak position by means of Bragg's equation. The mean crystallite size along the c axis (L c ) was calculated from the width at the half maximum of the 002 peak using Scherrer's equation. The average number of N (N c ) was estimated from d 002 and L c by means of the following equation [10] :",
-        "selection_reason": "contextual_relevance"
-      },
       {
         "paragraph_id": "paragraph_7ef8757e6856",
         "text": "The P s values increased linearly with increasing carbon content (Fig. 2 ). Fig. 3 shows the distribution of the number (N) of aromatic layers in raw coals. The distributions of N for the FO and BS coals did not differ significantly: in both of these coals, more than 70% of the stacking structure consisted of two layers. In the NL and HE coals, the proportion of two-layer structure decreased, and that of the three to five-layer structure increased, relative to the values for the FO, BS, MI, and EB coals. Fig. 4 shows the N ave values for the raw coals calculated from the distribution of N. The value for the lower-rank coals with carbon contents of less than 72 wt% was approximately 2.2. For coals with a carbon content more than 81 wt%, the N ave values increased with increasing carbon content. This pattern indicates that the stacking structure of the aromatic layers in the higherrank coals (carbon content O81 wt%) differs from that in the brown coals.",
@@ -325,9 +226,8 @@
       "figure_type": null,
       "xrd_score": 2.0,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_5.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_9ae77813fef8",
         "paragraph_01c823e67889"
@@ -407,9 +307,8 @@
       "figure_type": null,
       "xrd_score": 1.0,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_6.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_dca2c6b83435"
       ],
@@ -470,9 +369,8 @@
       "figure_type": null,
       "xrd_score": 1.0,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_7.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_b814cff47f55"
       ],

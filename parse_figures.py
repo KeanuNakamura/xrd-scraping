@@ -655,7 +655,7 @@ def extract_document_figures(
     for figure in figures:
         figure.image_paths = []
 
-        if xrd_only and not getattr(figure, "is_likely_xrd", False):
+        if xrd_only and not getattr(figure, "is_caption_xrd", False):
             continue
 
         figure_id = figure.figure_id or "unknown_figure"

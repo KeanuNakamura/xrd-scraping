@@ -121,6 +121,7 @@ FIGURE_REFERENCE_PATTERN = re.compile(
         supplementary\s+fig(?:ure)?s?\.?
     )
     \s*
+    (?:[\(\[\s])*
     (?P<number>[A-Za-z]?\d+[A-Za-z]?)
     """,
     flags=re.IGNORECASE | re.VERBOSE,
@@ -245,6 +246,7 @@ class Figure:
     figure_type: str | None
     xrd_score: float
     is_likely_xrd: bool
+    is_caption_xrd: bool
     image_paths: list[str] = field(default_factory=list)
     referenced_by_paragraph_ids: list[str] = field(default_factory=list)
     context_paragraph_ids: list[str] = field(default_factory=list)
@@ -393,10 +395,10 @@ def normalize_figure_label(label: str | None) -> str | None:
     normalized = re.sub(r"\s+", "", normalized)
     normalized = normalized.rstrip(".")
 
-    match = re.search(r"(?:fig\.?)?([a-z]?\d+[a-z]?)", normalized)
+    match = re.search(r"(\d+)", normalized)
 
     if match:
-        return match.group(1).lower()
+        return match.group(1)
 
     return normalized or None
 
@@ -1335,6 +1337,7 @@ class TEIXRDParser:
 
             figure_type = figure_element.get("type")
             xrd_score = score_xrd_text(caption)
+            is_caption_xrd = xrd_score >= 2.5
 
             figures.append(
                 Figure(
@@ -1347,7 +1350,8 @@ class TEIXRDParser:
                     graphic_coords=graphic_coords,
                     figure_type=figure_type,
                     xrd_score=xrd_score,
-                    is_likely_xrd=xrd_score >= 2.5,
+                    is_likely_xrd=is_caption_xrd,
+                    is_caption_xrd=is_caption_xrd,
                 )
             )
 
@@ -1563,6 +1567,70 @@ class TEIXRDParser:
         return total
 
 
+def collect_figure_analysis_text(
+    document: ParsedDocument,
+    figure: Figure,
+) -> str:
+    figure_label = figure.normalized_label
+
+    if not figure_label:
+        return ""
+
+    paragraph_index = {
+        paragraph.paragraph_id: index
+        for index, paragraph in enumerate(document.paragraphs)
+    }
+
+    anchor_paragraphs = [
+        paragraph
+        for paragraph in document.paragraphs
+        if paragraph.paragraph_id in figure.referenced_by_paragraph_ids
+    ]
+
+    selected_entries: list[tuple[int, str]] = []
+    seen_ids: set[str] = set()
+
+    for paragraph in document.paragraphs:
+        if figure_label not in paragraph.figure_references:
+            continue
+
+        relevant_text = extract_figure_mention_text(
+            paragraph.text,
+            figure_label,
+        )
+
+        if not relevant_text:
+            continue
+
+        selected_entries.append(
+            (paragraph_index[paragraph.paragraph_id], relevant_text)
+        )
+        seen_ids.add(paragraph.paragraph_id)
+
+    for paragraph in document.paragraphs:
+        if paragraph.paragraph_id in seen_ids:
+            continue
+
+        if not is_relevant_context_paragraph(
+            paragraph=paragraph,
+            figure=figure,
+            figure_label=figure_label,
+            anchor_paragraphs=anchor_paragraphs,
+        ):
+            continue
+
+        selected_entries.append(
+            (paragraph_index[paragraph.paragraph_id], paragraph.text)
+        )
+        seen_ids.add(paragraph.paragraph_id)
+
+    if not selected_entries:
+        return ""
+
+    selected_entries.sort(key=lambda entry: entry[0])
+    return "\n\n".join(text for _, text in selected_entries)
+
+
 def build_xrd_records(
     document: ParsedDocument,
 ) -> list[dict[str, Any]]:
@@ -1570,11 +1638,6 @@ def build_xrd_records(
     Build training-ready records where each likely XRD figure is paired
     with explicitly mentioned text plus nearby relevant discussion.
     """
-    paragraph_index = {
-        paragraph.paragraph_id: index
-        for index, paragraph in enumerate(document.paragraphs)
-    }
-
     records: list[dict[str, Any]] = []
 
     for figure in document.figures:
@@ -1586,14 +1649,15 @@ def build_xrd_records(
         if not figure_label:
             continue
 
-        anchor_paragraphs = [
-            paragraph
-            for paragraph in document.paragraphs
-            if paragraph.paragraph_id in figure.referenced_by_paragraph_ids
-        ]
+        combined_analysis_text = collect_figure_analysis_text(
+            document,
+            figure,
+        )
 
-        selected_entries: list[tuple[int, dict[str, Any]]] = []
-        seen_ids: set[str] = set()
+        if not combined_analysis_text:
+            continue
+
+        analysis_paragraphs = []
         peak_positions: set[float] = set()
         miller_indices: set[str] = set()
 
@@ -1606,58 +1670,16 @@ def build_xrd_records(
                 figure_label,
             )
 
-            if not relevant_text:
-                continue
-
-            selected_entries.append(
-                (
-                    paragraph_index[paragraph.paragraph_id],
+            if relevant_text:
+                analysis_paragraphs.append(
                     {
                         **asdict(paragraph),
                         "relevant_text": relevant_text,
                         "selection_reason": "explicit_figure_reference",
-                    },
+                    }
                 )
-            )
-            seen_ids.add(paragraph.paragraph_id)
-            peak_positions.update(paragraph.peak_positions)
-            miller_indices.update(paragraph.miller_indices)
-
-        for paragraph in document.paragraphs:
-            if paragraph.paragraph_id in seen_ids:
-                continue
-
-            if not is_relevant_context_paragraph(
-                paragraph=paragraph,
-                figure=figure,
-                figure_label=figure_label,
-                anchor_paragraphs=anchor_paragraphs,
-            ):
-                continue
-
-            selected_entries.append(
-                (
-                    paragraph_index[paragraph.paragraph_id],
-                    {
-                        **asdict(paragraph),
-                        "relevant_text": paragraph.text,
-                        "selection_reason": "contextual_relevance",
-                    },
-                )
-            )
-            seen_ids.add(paragraph.paragraph_id)
-            peak_positions.update(paragraph.peak_positions)
-            miller_indices.update(paragraph.miller_indices)
-
-        if not selected_entries:
-            continue
-
-        selected_entries.sort(key=lambda entry: entry[0])
-        analysis_paragraphs = [entry[1] for entry in selected_entries]
-        combined_parts = [
-            entry["relevant_text"]
-            for entry in analysis_paragraphs
-        ]
+                peak_positions.update(paragraph.peak_positions)
+                miller_indices.update(paragraph.miller_indices)
 
         records.append(
             {
@@ -1673,7 +1695,7 @@ def build_xrd_records(
                 },
                 "figure": asdict(figure),
                 "analysis_paragraphs": analysis_paragraphs,
-                "combined_analysis_text": "\n\n".join(combined_parts),
+                "combined_analysis_text": combined_analysis_text,
                 "extracted_features": {
                     "peak_positions_degrees": sorted(peak_positions),
                     "miller_indices": sorted(miller_indices),
@@ -1684,32 +1706,31 @@ def build_xrd_records(
     return records
 
 
-def figure_number_from_record(record: dict[str, Any]) -> int | str:
-    figure = record["figure"]
-    label = figure.get("normalized_label")
-
-    if label and str(label).isdigit():
-        return int(label)
-
-    figure_id = figure.get("figure_id") or ""
-    match = re.search(r"fig_(\d+)", figure_id, flags=re.IGNORECASE)
-
-    if match:
-        return int(match.group(1))
-
-    return label or figure_id or "unknown"
-
-
 def build_figure_analysis_dataset(
-    records: list[dict[str, Any]],
+    document: ParsedDocument,
+    *,
+    xrd_only: bool = False,
 ) -> list[dict[str, Any]]:
     dataset: list[dict[str, Any]] = []
+    seen_labels: set[str] = set()
 
-    for record in records:
-        figure = record["figure"]
-        caption = normalize_whitespace(figure.get("caption") or "")
+    for figure in document.figures:
+        if xrd_only and not figure.is_caption_xrd:
+            continue
+
+        figure_label = figure.normalized_label
+
+        if not figure_label or not figure_label.isdigit():
+            continue
+
+        if figure_label in seen_labels:
+            continue
+
+        seen_labels.add(figure_label)
+
+        caption = normalize_whitespace(figure.caption or "")
         analysis = normalize_whitespace(
-            record.get("combined_analysis_text") or ""
+            collect_figure_analysis_text(document, figure)
         )
 
         if caption and analysis:
@@ -1720,24 +1741,62 @@ def build_figure_analysis_dataset(
         if not text:
             continue
 
-        image_paths = figure.get("image_paths") or []
+        image_paths = figure.image_paths or []
         figure_path = image_paths[0] if image_paths else ""
 
         dataset.append(
             {
-                "figure": figure_number_from_record(record),
+                "figure": int(figure_label),
                 "figure_path": figure_path,
                 "caption": caption,
                 "text": text,
             }
         )
 
-    dataset.sort(
-        key=lambda entry: (
-            isinstance(entry["figure"], str),
-            entry["figure"],
-        )
-    )
+    if not xrd_only:
+        referenced_labels: set[str] = set()
+
+        for paragraph in document.paragraphs:
+            referenced_labels.update(paragraph.figure_references)
+
+        for figure_label in sorted(
+            referenced_labels - seen_labels,
+            key=lambda label: int(label) if label.isdigit() else label,
+        ):
+            if not figure_label.isdigit():
+                continue
+
+            analysis_parts: list[str] = []
+
+            for paragraph in document.paragraphs:
+                if figure_label not in paragraph.figure_references:
+                    continue
+
+                relevant_text = extract_figure_mention_text(
+                    paragraph.text,
+                    figure_label,
+                )
+
+                if relevant_text:
+                    analysis_parts.append(relevant_text)
+
+            analysis = normalize_whitespace(
+                "\n\n".join(dict.fromkeys(analysis_parts))
+            )
+
+            if not analysis:
+                continue
+
+            dataset.append(
+                {
+                    "figure": int(figure_label),
+                    "figure_path": "",
+                    "caption": "",
+                    "text": analysis,
+                }
+            )
+
+    dataset.sort(key=lambda entry: entry["figure"])
 
     return dataset
 
@@ -1820,7 +1879,10 @@ def parse_pdf(
             ensure_ascii=False,
         )
 
-    figure_analysis = build_figure_analysis_dataset(records)
+    figure_analysis = build_figure_analysis_dataset(
+        document,
+        xrd_only=xrd_figures_only,
+    )
 
     figure_analysis_output_path = (
         output_directory / f"{pdf_path.stem}.figure_analysis.json"
@@ -1885,7 +1947,10 @@ def main() -> None:
     argument_parser.add_argument(
         "--xrd-figures-only",
         action="store_true",
-        help="Only extract images for figures classified as likely XRD.",
+        help=(
+            "Limit figure images and figure_analysis.json to figures "
+            "classified as likely XRD."
+        ),
     )
 
     argument_parser.add_argument(

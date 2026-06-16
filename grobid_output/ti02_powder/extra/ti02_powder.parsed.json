@@ -184,7 +184,10 @@
             "TEM"
           ],
           "section_type": "other",
-          "figure_references": [],
+          "figure_references": [
+            "3",
+            "4"
+          ],
           "xrd_score": 2.9,
           "peak_positions": [],
           "miller_indices": []
@@ -196,7 +199,9 @@
             "TEM"
           ],
           "section_type": "other",
-          "figure_references": [],
+          "figure_references": [
+            "3"
+          ],
           "xrd_score": 3.9,
           "peak_positions": [],
           "miller_indices": [
@@ -322,7 +327,10 @@
         "TEM"
       ],
       "section_type": "other",
-      "figure_references": [],
+      "figure_references": [
+        "3",
+        "4"
+      ],
       "xrd_score": 2.9,
       "peak_positions": [],
       "miller_indices": []
@@ -334,7 +342,9 @@
         "TEM"
       ],
       "section_type": "other",
-      "figure_references": [],
+      "figure_references": [
+        "3"
+      ],
       "xrd_score": 3.9,
       "peak_positions": [],
       "miller_indices": [
@@ -367,6 +377,7 @@
       "figure_type": null,
       "xrd_score": 7.5,
       "is_likely_xrd": true,
+      "is_caption_xrd": true,
       "image_paths": [
         "grobid_output/ti02_powder/figures/fig_1.png"
       ],
@@ -395,6 +406,7 @@
       "figure_type": null,
       "xrd_score": 7.5,
       "is_likely_xrd": true,
+      "is_caption_xrd": true,
       "image_paths": [
         "grobid_output/ti02_powder/figures/fig_2.png"
       ],
@@ -423,6 +435,7 @@
       "figure_type": null,
       "xrd_score": 0.0,
       "is_likely_xrd": false,
+      "is_caption_xrd": false,
       "image_paths": [],
       "referenced_by_paragraph_ids": [],
       "context_paragraph_ids": []
@@ -436,13 +449,23 @@
       "coords": "3,62.32,659.40,408.21,10.49;3,104.82,673.54,365.72,10.35;3,79.38,274.80,374.15,373.90",
       "graphic_coords": "3,79.38,274.80,374.15,373.90",
       "figure_type": null,
-      "xrd_score": 0.9,
-      "is_likely_xrd": false,
-      "image_paths": [
-        "grobid_output/ti02_powder/figures/fig_3.png"
+      "xrd_score": 6.4,
+      "is_likely_xrd": true,
+      "is_caption_xrd": false,
+      "image_paths": [],
+      "referenced_by_paragraph_ids": [
+        "paragraph_00ba2d08a3fa",
+        "paragraph_819e136bc877"
       ],
-      "referenced_by_paragraph_ids": [],
-      "context_paragraph_ids": []
+      "context_paragraph_ids": [
+        "paragraph_bab7ee8ed270",
+        "paragraph_5b0d784a1383",
+        "paragraph_06386a71086f",
+        "paragraph_378f2afe20bd",
+        "paragraph_00ba2d08a3fa",
+        "paragraph_819e136bc877",
+        "paragraph_390bf0bbf224"
+      ]
     },
     {
       "figure_id": "fig_4",
@@ -453,13 +476,22 @@
       "coords": "4,50.99,649.44,408.19,10.49;4,93.48,663.58,365.69,10.38;4,93.48,677.58,31.95,9.12;4,68.73,256.95,375.00,383.00",
       "graphic_coords": "4,68.73,256.95,375.00,383.00",
       "figure_type": null,
-      "xrd_score": 0.9,
-      "is_likely_xrd": false,
-      "image_paths": [
-        "grobid_output/ti02_powder/figures/fig_4.png"
+      "xrd_score": 3.9,
+      "is_likely_xrd": true,
+      "is_caption_xrd": false,
+      "image_paths": [],
+      "referenced_by_paragraph_ids": [
+        "paragraph_00ba2d08a3fa"
       ],
-      "referenced_by_paragraph_ids": [],
-      "context_paragraph_ids": []
+      "context_paragraph_ids": [
+        "paragraph_bab7ee8ed270",
+        "paragraph_5b0d784a1383",
+        "paragraph_06386a71086f",
+        "paragraph_378f2afe20bd",
+        "paragraph_00ba2d08a3fa",
+        "paragraph_819e136bc877",
+        "paragraph_390bf0bbf224"
+      ]
     }
   ],
   "tables": [],
@@ -530,7 +562,7 @@
     "results_paragraphs": 0,
     "xrd_paragraphs": 6,
     "figures": 5,
-    "xrd_figures": 2,
+    "xrd_figures": 4,
     "tables": 0,
     "references": 5
   }

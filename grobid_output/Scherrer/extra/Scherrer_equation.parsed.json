@@ -1123,9 +1123,8 @@
       "figure_type": null,
       "xrd_score": 1.4,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/Scherrer/figures/fig_1.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_9e606db7731d"
       ],
@@ -1152,6 +1151,7 @@
       "figure_type": null,
       "xrd_score": 6.5,
       "is_likely_xrd": true,
+      "is_caption_xrd": true,
       "image_paths": [
         "grobid_output/Scherrer/figures/fig_2.png"
       ],
@@ -1181,6 +1181,7 @@
       "figure_type": null,
       "xrd_score": 0.4,
       "is_likely_xrd": false,
+      "is_caption_xrd": false,
       "image_paths": [],
       "referenced_by_paragraph_ids": [],
       "context_paragraph_ids": []
@@ -1196,9 +1197,8 @@
       "figure_type": null,
       "xrd_score": 2.9,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/Scherrer/figures/fig_3.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_e2a80a07a74a"
       ],
@@ -1225,9 +1225,8 @@
       "figure_type": null,
       "xrd_score": 0.5,
       "is_likely_xrd": false,
-      "image_paths": [
-        "grobid_output/Scherrer/figures/fig_4.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [],
       "context_paragraph_ids": []
     },
@@ -1242,9 +1241,8 @@
       "figure_type": null,
       "xrd_score": 2.3,
       "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/Scherrer/figures/fig_6_2.png"
-      ],
+      "is_caption_xrd": false,
+      "image_paths": [],
       "referenced_by_paragraph_ids": [
         "paragraph_a448b2fddf60"
       ],
