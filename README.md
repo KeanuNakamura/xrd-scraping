@@ -1,57 +1,76 @@
-Installation and Usage
+## Setup
 
-This project uses GROBID to extract structured information from scientific PDF documents.
+### 1. Start GROBID with Docker
 
-1. Start GROBID
+Run the GROBID server in a Docker container:
 
-Run the GROBID server with Docker:
-
+```bash
 docker run --rm \
   --init \
   --ulimit core=0 \
   -p 8070:8070 \
   grobid/grobid:0.9.0-crf
+```
 
 GROBID will be available at:
 
+```text
 http://localhost:8070
+```
 
-Keep the Docker container running while using the PDF parser.
+Keep this terminal open while parsing PDFs.
 
-2. Set Up the Python Environment
+### 2. Create a Virtual Environment
 
-Create a virtual environment:
+Create the Python virtual environment:
 
+```bash
 python3 -m venv .venv
+```
 
-Activate the virtual environment:
+Activate it on macOS or Linux:
 
-macOS or Linux
+```bash
 source .venv/bin/activate
-Windows PowerShell
+```
+
+Activate it on Windows PowerShell:
+
+```powershell
 .venv\Scripts\Activate.ps1
+```
 
-Upgrade pip and install the required packages:
+### 3. Install Dependencies
 
+Upgrade `pip` and install the required packages:
+
+```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-3. Parse a PDF
+```
 
-Place the PDF you want to process inside the pdf_files/ directory.
+## Usage
 
-Use the following command format:
+Place the PDF you want to parse inside the `pdf_files/` directory.
 
-python pdf_parser.py <pdf-path> --output <output-path>
+Run the parser using the following format:
 
-For example:
+```bash
+python pdf_parser.py <pdf_path> --output <output_path>
+```
 
-python pdf_parser.py \
-  pdf_files/tio2_powder.pdf \
+### Example
+
+```bash
+python pdf_parser.py pdf_files/tio2_powder.pdf \
   --output grobid_output/tio2_powder
+```
 
-The parser will send the PDF to the local GROBID server and save the processed files to the specified output path.
+The parser will process the PDF using the local GROBID server and save the generated files to the specified output directory.
 
-Example Project Structure
+## Example Project Structure
+
+```text
 project/
 ├── pdf_files/
 │   └── tio2_powder.pdf
@@ -60,24 +79,8 @@ project/
 ├── requirements.txt
 ├── .gitignore
 └── README.md
-Complete Example
+```
 
-Open one terminal and start the GROBID Docker container:
+## Stopping GROBID
 
-docker run --rm \
-  --init \
-  --ulimit core=0 \
-  -p 8070:8070 \
-  grobid/grobid:0.9.0-crf
-
-Open a second terminal, activate the Python environment, and run the parser:
-
-source .venv/bin/activate
-
-python pdf_parser.py \
-  pdf_files/tio2_powder.pdf \
-  --output grobid_output/tio2_powder
-
-To stop GROBID, return to the terminal running Docker and press:
-
-Ctrl+C
+To stop the GROBID Docker container, press `Ctrl+C` in the terminal where it is running.
