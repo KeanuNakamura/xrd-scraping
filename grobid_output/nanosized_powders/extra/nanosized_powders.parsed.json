@@ -2014,7 +2014,7 @@
   ],
   "figures": [
     {
-      "figure_id": "fig_0",
+      "figure_id": "fig_1",
       "label": "1",
       "normalized_label": "1",
       "caption": "Figure 1 . Figure 1. XRD spectra as a function of and ; A) ¼ 10 nm, B) ¼ 1.5.",
@@ -2022,24 +2022,28 @@
       "coords": "6,114.29,628.90,264.67,7.09",
       "graphic_coords": null,
       "figure_type": null,
-      "xrd_score": 5.0,
+      "xrd_score": 5.5,
       "is_likely_xrd": true,
       "image_paths": [
-        "grobid_output/nanosized_powders/figures/fig_0.png"
+        "grobid_output/nanosized_powders/figures/fig_1.png"
       ],
       "referenced_by_paragraph_ids": [
         "paragraph_9e20a05848db"
       ],
       "context_paragraph_ids": [
+        "paragraph_79020172bcdd",
+        "paragraph_9b9bc776e93a",
         "paragraph_10e0aee1a9a7",
         "paragraph_0dc60d868f16",
         "paragraph_9e20a05848db",
         "paragraph_d0fe54dd151d",
-        "paragraph_980a8b9dddd3"
+        "paragraph_980a8b9dddd3",
+        "paragraph_410cbe7c19b9",
+        "paragraph_1ab034cf4e5e"
       ]
     },
     {
-      "figure_id": "fig_1",
+      "figure_id": "fig_4",
       "label": "4",
       "normalized_label": "4",
       "caption": "4 log 2 -2 -1.8 -1.6 -1.4 -1.2 -1 -0.8 -0.6 -02 -2 -1.8 -1.6 -1.4 -1.2 -1 -0.8 -0.6 -0.",
@@ -2073,13 +2077,17 @@
         "paragraph_14cb12d98da3"
       ],
       "context_paragraph_ids": [
+        "paragraph_0e08675302ef",
+        "paragraph_31ecc461a93b",
         "paragraph_21b82653e97b",
         "paragraph_d837f7b714f8",
         "paragraph_d70b4358972a",
         "paragraph_dc9cb1dde1d5",
         "paragraph_14cb12d98da3",
         "paragraph_f2f35651e7e2",
-        "paragraph_95cd15b8625e"
+        "paragraph_95cd15b8625e",
+        "paragraph_731514fd19ec",
+        "paragraph_a6370ac17d3b"
       ]
     },
     {
@@ -2091,7 +2099,7 @@
       "coords": "11,84.59,628.90,324.00,7.09;11,251.22,454.50,112.92,170.51",
       "graphic_coords": "11,251.22,454.50,112.92,170.51",
       "figure_type": null,
-      "xrd_score": 4.0,
+      "xrd_score": 6.0,
       "is_likely_xrd": true,
       "image_paths": [
         "grobid_output/nanosized_powders/figures/fig_3.png"
@@ -2101,20 +2109,27 @@
         "paragraph_9839fc7cc69a"
       ],
       "context_paragraph_ids": [
+        "paragraph_0edcdd1f196d",
+        "paragraph_93c1c9163481",
         "paragraph_04f20aa99a96",
         "paragraph_ff79effaba3d",
         "paragraph_8aa7bd892018",
         "paragraph_ebfeb5653039",
         "paragraph_b60a0426fcff",
+        "paragraph_00458b0efb08",
+        "paragraph_50a9c8cbd40f",
+        "paragraph_5013482e6168",
+        "paragraph_6b82a3838aa3",
         "paragraph_1bbb65f71d12",
         "paragraph_c8c973aa7f70",
         "paragraph_9839fc7cc69a",
         "paragraph_914351d68263",
-        "paragraph_59eb82a57eb1"
+        "paragraph_59eb82a57eb1",
+        "paragraph_a8c02267a1f4"
       ]
     },
     {
-      "figure_id": "fig_4",
+      "figure_id": "fig_4_2",
       "label": "4",
       "normalized_label": "4",
       "caption": "Figure 4 . Figure 4. Gaussian function with log-normal size distribution function fit; A) SSEC78, B) P25, C) UV100, D) TiO2_5 nm.",
@@ -2122,20 +2137,24 @@
       "coords": "13,61.29,451.96,370.61,7.09;13,61.29,461.15,51.88,7.09",
       "graphic_coords": null,
       "figure_type": null,
-      "xrd_score": 2.5,
+      "xrd_score": 4.0,
       "is_likely_xrd": true,
       "image_paths": [
-        "grobid_output/nanosized_powders/figures/fig_4.png"
+        "grobid_output/nanosized_powders/figures/fig_4_2.png"
       ],
       "referenced_by_paragraph_ids": [
         "paragraph_b60a0426fcff"
       ],
       "context_paragraph_ids": [
+        "paragraph_04f20aa99a96",
+        "paragraph_ff79effaba3d",
         "paragraph_8aa7bd892018",
         "paragraph_ebfeb5653039",
         "paragraph_b60a0426fcff",
         "paragraph_00458b0efb08",
-        "paragraph_50a9c8cbd40f"
+        "paragraph_50a9c8cbd40f",
+        "paragraph_f07478d5c905",
+        "paragraph_a3d91e3a35c9"
       ]
     },
     {
@@ -2147,7 +2166,7 @@
       "coords": "14,95.02,450.66,303.19,7.09",
       "graphic_coords": null,
       "figure_type": null,
-      "xrd_score": 6.5,
+      "xrd_score": 7.5,
       "is_likely_xrd": true,
       "image_paths": [
         "grobid_output/nanosized_powders/figures/fig_5.png"
@@ -2156,11 +2175,15 @@
         "paragraph_50a9c8cbd40f"
       ],
       "context_paragraph_ids": [
+        "paragraph_8aa7bd892018",
+        "paragraph_ebfeb5653039",
         "paragraph_b60a0426fcff",
         "paragraph_00458b0efb08",
         "paragraph_50a9c8cbd40f",
         "paragraph_f07478d5c905",
-        "paragraph_a3d91e3a35c9"
+        "paragraph_a3d91e3a35c9",
+        "paragraph_b3f7ade9f094",
+        "paragraph_3334bd6b3f7d"
       ]
     },
     {
@@ -2172,7 +2195,7 @@
       "coords": "15,196.21,333.81,100.77,7.09",
       "graphic_coords": null,
       "figure_type": null,
-      "xrd_score": 2.0,
+      "xrd_score": 3.0,
       "is_likely_xrd": true,
       "image_paths": [
         "grobid_output/nanosized_powders/figures/fig_6.png"
@@ -2181,11 +2204,15 @@
         "paragraph_a3d91e3a35c9"
       ],
       "context_paragraph_ids": [
+        "paragraph_b60a0426fcff",
+        "paragraph_00458b0efb08",
         "paragraph_50a9c8cbd40f",
         "paragraph_f07478d5c905",
         "paragraph_a3d91e3a35c9",
         "paragraph_b3f7ade9f094",
-        "paragraph_3334bd6b3f7d"
+        "paragraph_3334bd6b3f7d",
+        "paragraph_16e78ce5fe5d",
+        "paragraph_37af50b73a4c"
       ]
     },
     {
@@ -2197,7 +2224,7 @@
       "coords": "16,190.49,349.75,112.21,7.09",
       "graphic_coords": null,
       "figure_type": null,
-      "xrd_score": 1.5,
+      "xrd_score": 3.0,
       "is_likely_xrd": true,
       "image_paths": [
         "grobid_output/nanosized_powders/figures/fig_7.png"
@@ -2206,11 +2233,15 @@
         "paragraph_b3f7ade9f094"
       ],
       "context_paragraph_ids": [
+        "paragraph_00458b0efb08",
+        "paragraph_50a9c8cbd40f",
         "paragraph_f07478d5c905",
         "paragraph_a3d91e3a35c9",
         "paragraph_b3f7ade9f094",
         "paragraph_3334bd6b3f7d",
-        "paragraph_16e78ce5fe5d"
+        "paragraph_16e78ce5fe5d",
+        "paragraph_37af50b73a4c",
+        "paragraph_58481a1d0f97"
       ]
     },
     {
@@ -2222,7 +2253,7 @@
       "coords": "17,183.69,331.94,125.86,7.09",
       "graphic_coords": null,
       "figure_type": null,
-      "xrd_score": 1.0,
+      "xrd_score": 3.0,
       "is_likely_xrd": true,
       "image_paths": [
         "grobid_output/nanosized_powders/figures/fig_8.png"
@@ -2231,11 +2262,15 @@
         "paragraph_3334bd6b3f7d"
       ],
       "context_paragraph_ids": [
+        "paragraph_50a9c8cbd40f",
+        "paragraph_f07478d5c905",
         "paragraph_a3d91e3a35c9",
         "paragraph_b3f7ade9f094",
         "paragraph_3334bd6b3f7d",
         "paragraph_16e78ce5fe5d",
-        "paragraph_37af50b73a4c"
+        "paragraph_37af50b73a4c",
+        "paragraph_58481a1d0f97",
+        "paragraph_3c02a2fd9062"
       ]
     },
     {

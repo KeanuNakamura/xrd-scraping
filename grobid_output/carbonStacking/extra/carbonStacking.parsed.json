@@ -698,7 +698,7 @@
   ],
   "figures": [
     {
-      "figure_id": "fig_0",
+      "figure_id": "fig_1",
       "label": "1",
       "normalized_label": "1",
       "caption": "Fig. 1 . Fig.1. XRD profiles of raw coals.",
@@ -706,66 +706,18 @@
       "coords": "3,106.87,729.65,110.42,7.01;3,70.07,370.05,184.03,350.87",
       "graphic_coords": "3,70.07,370.05,184.03,350.87",
       "figure_type": null,
-      "xrd_score": 6.0,
-      "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_0.png"
-      ],
-      "referenced_by_paragraph_ids": [
-        "paragraph_efd8f1103230"
-      ],
-      "context_paragraph_ids": [
-        "paragraph_1c8575d36e79",
-        "paragraph_0da122243893",
-        "paragraph_efd8f1103230",
-        "paragraph_7ef8757e6856",
-        "paragraph_23efbe22a68a"
-      ]
-    },
-    {
-      "figure_id": "fig_1",
-      "label": "3",
-      "normalized_label": "3",
-      "caption": "Fig. 3 . Fig. 3. Distribution of the number (N) of aromatic layers in raw coals.",
-      "graphic_targets": [],
-      "coords": "4,188.11,301.11,227.21,7.01;4,145.13,71.22,313.16,221.22",
-      "graphic_coords": "4,145.13,71.22,313.16,221.22",
-      "figure_type": null,
-      "xrd_score": 1.5,
+      "xrd_score": 7.0,
       "is_likely_xrd": true,
       "image_paths": [
         "grobid_output/carbonStacking/figures/fig_1.png"
       ],
       "referenced_by_paragraph_ids": [
-        "paragraph_7ef8757e6856"
+        "paragraph_efd8f1103230"
       ],
       "context_paragraph_ids": [
-        "paragraph_0da122243893",
-        "paragraph_efd8f1103230",
-        "paragraph_7ef8757e6856",
-        "paragraph_23efbe22a68a",
-        "paragraph_11a9011bdcb9"
-      ]
-    },
-    {
-      "figure_id": "fig_2",
-      "label": "4",
-      "normalized_label": "4",
-      "caption": "Fig. 4 . Fig.4. N ave values of raw coals.",
-      "graphic_targets": [],
-      "coords": "4,381.32,729.65,103.85,7.73;4,338.17,530.94,190.07,190.03",
-      "graphic_coords": "4,338.17,530.94,190.07,190.03",
-      "figure_type": null,
-      "xrd_score": 2.5,
-      "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_2.png"
-      ],
-      "referenced_by_paragraph_ids": [
-        "paragraph_7ef8757e6856",
-        "paragraph_23efbe22a68a"
-      ],
-      "context_paragraph_ids": [
+        "paragraph_d02167acbfe0",
+        "paragraph_b6149353f63f",
+        "paragraph_1c8575d36e79",
         "paragraph_0da122243893",
         "paragraph_efd8f1103230",
         "paragraph_7ef8757e6856",
@@ -776,6 +728,66 @@
     },
     {
       "figure_id": "fig_3",
+      "label": "3",
+      "normalized_label": "3",
+      "caption": "Fig. 3 . Fig. 3. Distribution of the number (N) of aromatic layers in raw coals.",
+      "graphic_targets": [],
+      "coords": "4,188.11,301.11,227.21,7.01;4,145.13,71.22,313.16,221.22",
+      "graphic_coords": "4,145.13,71.22,313.16,221.22",
+      "figure_type": null,
+      "xrd_score": 2.5,
+      "is_likely_xrd": true,
+      "image_paths": [
+        "grobid_output/carbonStacking/figures/fig_3.png"
+      ],
+      "referenced_by_paragraph_ids": [
+        "paragraph_7ef8757e6856"
+      ],
+      "context_paragraph_ids": [
+        "paragraph_b6149353f63f",
+        "paragraph_1c8575d36e79",
+        "paragraph_0da122243893",
+        "paragraph_efd8f1103230",
+        "paragraph_7ef8757e6856",
+        "paragraph_23efbe22a68a",
+        "paragraph_11a9011bdcb9",
+        "paragraph_9ae77813fef8",
+        "paragraph_dca2c6b83435"
+      ]
+    },
+    {
+      "figure_id": "fig_4",
+      "label": "4",
+      "normalized_label": "4",
+      "caption": "Fig. 4 . Fig.4. N ave values of raw coals.",
+      "graphic_targets": [],
+      "coords": "4,381.32,729.65,103.85,7.73;4,338.17,530.94,190.07,190.03",
+      "graphic_coords": "4,338.17,530.94,190.07,190.03",
+      "figure_type": null,
+      "xrd_score": 4.0,
+      "is_likely_xrd": true,
+      "image_paths": [
+        "grobid_output/carbonStacking/figures/fig_4.png"
+      ],
+      "referenced_by_paragraph_ids": [
+        "paragraph_7ef8757e6856",
+        "paragraph_23efbe22a68a"
+      ],
+      "context_paragraph_ids": [
+        "paragraph_b6149353f63f",
+        "paragraph_1c8575d36e79",
+        "paragraph_0da122243893",
+        "paragraph_efd8f1103230",
+        "paragraph_7ef8757e6856",
+        "paragraph_23efbe22a68a",
+        "paragraph_11a9011bdcb9",
+        "paragraph_9ae77813fef8",
+        "paragraph_dca2c6b83435",
+        "paragraph_7a3b23973383"
+      ]
+    },
+    {
+      "figure_id": "fig_5",
       "label": "5",
       "normalized_label": "5",
       "caption": "Fig. 5 . Fig. 5. P s values of caking (PI, MI) and non-caking (EB) coals as a function of heat-treatment temperature.",
@@ -783,16 +795,49 @@
       "coords": "5,42.52,719.67,239.17,7.79;5,42.52,729.65,97.73,7.01;5,74.27,547.33,175.66,163.67",
       "graphic_coords": "5,74.27,547.33,175.66,163.67",
       "figure_type": null,
-      "xrd_score": 1.0,
+      "xrd_score": 2.0,
       "is_likely_xrd": true,
       "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_3.png"
+        "grobid_output/carbonStacking/figures/fig_5.png"
       ],
       "referenced_by_paragraph_ids": [
         "paragraph_9ae77813fef8",
         "paragraph_01c823e67889"
       ],
       "context_paragraph_ids": [
+        "paragraph_efd8f1103230",
+        "paragraph_7ef8757e6856",
+        "paragraph_23efbe22a68a",
+        "paragraph_11a9011bdcb9",
+        "paragraph_9ae77813fef8",
+        "paragraph_dca2c6b83435",
+        "paragraph_7a3b23973383",
+        "paragraph_01c823e67889",
+        "paragraph_3bd348f6a37e",
+        "paragraph_b814cff47f55",
+        "paragraph_4677f222f912",
+        "paragraph_b499af9ffeec"
+      ]
+    },
+    {
+      "figure_id": "fig_6",
+      "label": "6",
+      "normalized_label": "6",
+      "caption": "Fig. 6 . Fig. 6. N ave values of caking (PI, MI) and non-caking (EB) coals as a function of heat-treatment temperature.",
+      "graphic_targets": [],
+      "coords": "5,305.52,719.56,239.12,7.79;5,305.52,729.54,126.70,7.01;5,338.51,540.81,173.16,170.08",
+      "graphic_coords": "5,338.51,540.81,173.16,170.08",
+      "figure_type": null,
+      "xrd_score": 1.0,
+      "is_likely_xrd": true,
+      "image_paths": [
+        "grobid_output/carbonStacking/figures/fig_6.png"
+      ],
+      "referenced_by_paragraph_ids": [
+        "paragraph_dca2c6b83435"
+      ],
+      "context_paragraph_ids": [
+        "paragraph_7ef8757e6856",
         "paragraph_23efbe22a68a",
         "paragraph_11a9011bdcb9",
         "paragraph_9ae77813fef8",
@@ -804,32 +849,7 @@
       ]
     },
     {
-      "figure_id": "fig_4",
-      "label": "6",
-      "normalized_label": "6",
-      "caption": "Fig. 6 . Fig. 6. N ave values of caking (PI, MI) and non-caking (EB) coals as a function of heat-treatment temperature.",
-      "graphic_targets": [],
-      "coords": "5,305.52,719.56,239.12,7.79;5,305.52,729.54,126.70,7.01;5,338.51,540.81,173.16,170.08",
-      "graphic_coords": "5,338.51,540.81,173.16,170.08",
-      "figure_type": null,
-      "xrd_score": 0.5,
-      "is_likely_xrd": false,
-      "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_4.png"
-      ],
-      "referenced_by_paragraph_ids": [
-        "paragraph_dca2c6b83435"
-      ],
-      "context_paragraph_ids": [
-        "paragraph_11a9011bdcb9",
-        "paragraph_9ae77813fef8",
-        "paragraph_dca2c6b83435",
-        "paragraph_7a3b23973383",
-        "paragraph_01c823e67889"
-      ]
-    },
-    {
-      "figure_id": "fig_5",
+      "figure_id": "fig_7",
       "label": "7",
       "normalized_label": "7",
       "caption": "Fig. 7 . Fig. 7. Influence of heating rate at 920 8C on P s and N ave values of BS, EB, PI, and NL coals.",
@@ -840,12 +860,14 @@
       "xrd_score": 1.0,
       "is_likely_xrd": true,
       "image_paths": [
-        "grobid_output/carbonStacking/figures/fig_5.png"
+        "grobid_output/carbonStacking/figures/fig_7.png"
       ],
       "referenced_by_paragraph_ids": [
         "paragraph_b814cff47f55"
       ],
       "context_paragraph_ids": [
+        "paragraph_dca2c6b83435",
+        "paragraph_7a3b23973383",
         "paragraph_01c823e67889",
         "paragraph_3bd348f6a37e",
         "paragraph_b814cff47f55",
@@ -1123,7 +1145,7 @@
     "results_paragraphs": 4,
     "xrd_paragraphs": 9,
     "figures": 6,
-    "xrd_figures": 5,
+    "xrd_figures": 6,
     "tables": 3,
     "references": 20
   }

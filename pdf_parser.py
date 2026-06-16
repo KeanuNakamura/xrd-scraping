@@ -24,6 +24,14 @@ NS = {
     "tei": TEI_NAMESPACE,
 }
 
+XML_ID = "{http://www.w3.org/XML/1998/namespace}id"
+
+CONTEXT_WINDOW = 4
+CONTEXT_SECTION_XRD_THRESHOLD = 1.0
+CONTEXT_WINDOW_XRD_THRESHOLD = 1.5
+
+GROBID_FIGURE_ID_PATTERN = re.compile(r"^fig_(\d+)$", re.IGNORECASE)
+
 XRD_KEYWORDS = {
     "xrd",
     "x-ray diffraction",
@@ -116,6 +124,32 @@ FIGURE_REFERENCE_PATTERN = re.compile(
     (?P<number>[A-Za-z]?\d+[A-Za-z]?)
     """,
     flags=re.IGNORECASE | re.VERBOSE,
+)
+
+ABBREVIATION_DOT_PATTERN = re.compile(
+    r"\b(?:Fig(?:ure)?|vs|etc)\.",
+    flags=re.IGNORECASE,
+)
+
+SENTENCE_ABBREVIATION_PLACEHOLDER = "\uE000"
+
+
+def split_into_sentences(text: str) -> list[str]:
+    protected_text = ABBREVIATION_DOT_PATTERN.sub(
+        lambda match: match.group(0).replace(".", SENTENCE_ABBREVIATION_PLACEHOLDER),
+        normalize_whitespace(text),
+    )
+    sentences = re.split(r"(?<=[.!?])\s+", protected_text)
+
+    return [
+        sentence.replace(SENTENCE_ABBREVIATION_PLACEHOLDER, ".")
+        for sentence in sentences
+        if sentence.strip()
+    ]
+
+CLAUSE_SPLIT_PATTERN = re.compile(
+    r";\s*|(?:\.\s+)?On the other hand,\s*",
+    flags=re.IGNORECASE,
 )
 
 DOI_PATTERN = re.compile(
@@ -367,6 +401,183 @@ def normalize_figure_label(label: str | None) -> str | None:
     return normalized or None
 
 
+def figure_label_from_caption(caption: str) -> str | None:
+    match = re.search(
+        r"\bfig(?:ure)?s?\.?\s*(?P<number>[A-Za-z]?\d+[A-Za-z]?)",
+        caption,
+        flags=re.IGNORECASE,
+    )
+
+    if not match:
+        return None
+
+    return normalize_figure_label(match.group("number"))
+
+
+def is_valid_figure_label(
+    normalized_label: str | None,
+    caption: str,
+) -> bool:
+    if not normalized_label or not re.fullmatch(
+        r"\d+[a-z]?",
+        normalized_label,
+    ):
+        return False
+
+    caption_label = figure_label_from_caption(caption)
+
+    if caption_label and caption_label != normalized_label:
+        return False
+
+    return True
+
+
+def resolve_one_based_figure_id(
+    grobid_figure_id: str | None,
+    normalized_label: str | None,
+    caption: str,
+) -> str:
+    if is_valid_figure_label(normalized_label, caption):
+        return f"fig_{normalized_label}"
+
+    caption_label = figure_label_from_caption(caption)
+
+    if caption_label:
+        return f"fig_{caption_label}"
+
+    if grobid_figure_id:
+        match = GROBID_FIGURE_ID_PATTERN.match(grobid_figure_id)
+
+        if match:
+            return f"fig_{int(match.group(1)) + 1}"
+
+        return grobid_figure_id
+
+    return make_stable_id("figure", caption)
+
+
+def figure_metadata_from_element(
+    figure_element: etree._Element,
+) -> tuple[str | None, str | None, str]:
+    label = xpath_text(
+        figure_element,
+        "./tei:head/tei:label[1]",
+    )
+
+    if not label:
+        label = xpath_text(
+            figure_element,
+            "./tei:label[1]",
+        )
+
+    caption_parts = xpath_all_text(
+        figure_element,
+        "./tei:figDesc | ./tei:head | ./tei:p",
+    )
+
+    caption = normalize_whitespace(
+        " ".join(dict.fromkeys(caption_parts))
+    )
+
+    return label, normalize_figure_label(label), caption
+
+
+def reindex_tei_figure_ids(tei_xml: bytes) -> bytes:
+    """
+    Rewrite GROBID's 0-based figure xml:id values to 1-based paper labels.
+    """
+    xml_parser = etree.XMLParser(
+        recover=True,
+        remove_blank_text=True,
+        huge_tree=True,
+        resolve_entities=False,
+        no_network=True,
+    )
+    root = etree.fromstring(tei_xml, parser=xml_parser)
+
+    figure_entries: list[tuple[etree._Element, str, str | None, str]] = []
+
+    for figure_element in root.xpath(
+        ".//tei:text/tei:body//tei:figure[not(@type='table')]",
+        namespaces=NS,
+    ):
+        old_id = figure_element.get(XML_ID)
+
+        if not old_id:
+            continue
+
+        label, normalized_label, caption = figure_metadata_from_element(
+            figure_element
+        )
+        figure_entries.append(
+            (figure_element, old_id, normalized_label, caption)
+        )
+
+    id_map: dict[str, str] = {}
+    used_ids: set[str] = set()
+
+    def assign_id(old_id: str, candidate: str) -> str:
+        base_id = candidate
+        counter = 2
+        new_id = candidate
+
+        while new_id in used_ids:
+            new_id = f"{base_id}_{counter}"
+            counter += 1
+
+        id_map[old_id] = new_id
+        used_ids.add(new_id)
+        return new_id
+
+    for figure_element, old_id, normalized_label, caption in figure_entries:
+        if not is_valid_figure_label(normalized_label, caption):
+            continue
+
+        new_id = assign_id(old_id, f"fig_{normalized_label}")
+        figure_element.set(XML_ID, new_id)
+
+    for figure_element, old_id, normalized_label, caption in figure_entries:
+        if old_id in id_map:
+            continue
+
+        caption_label = figure_label_from_caption(caption)
+
+        if caption_label:
+            new_id = assign_id(old_id, f"fig_{caption_label}")
+            figure_element.set(XML_ID, new_id)
+
+    for figure_element, old_id, normalized_label, caption in figure_entries:
+        if old_id in id_map:
+            continue
+
+        match = GROBID_FIGURE_ID_PATTERN.match(old_id)
+
+        if match:
+            new_id = assign_id(old_id, f"fig_{int(match.group(1)) + 1}")
+            figure_element.set(XML_ID, new_id)
+            continue
+
+        new_id = assign_id(old_id, old_id)
+        figure_element.set(XML_ID, new_id)
+
+    for reference in root.xpath(".//tei:ref[@target]", namespaces=NS):
+        target = reference.get("target")
+
+        if not target or not target.startswith("#"):
+            continue
+
+        mapped_id = id_map.get(target[1:])
+
+        if mapped_id:
+            reference.set("target", f"#{mapped_id}")
+
+    return etree.tostring(
+        root,
+        encoding="UTF-8",
+        xml_declaration=True,
+    )
+
+
 def extract_figure_references(text: str) -> list[str]:
     references: list[str] = []
 
@@ -377,6 +588,131 @@ def extract_figure_references(text: str) -> list[str]:
             references.append(label)
 
     return references
+
+
+def sentence_is_specific_to_figure(
+    sentence: str,
+    figure_label: str,
+) -> bool:
+    references = extract_figure_references(sentence)
+
+    if figure_label not in references:
+        return False
+
+    if len(references) == 1:
+        return True
+
+    for clause in CLAUSE_SPLIT_PATTERN.split(sentence):
+        clause = clause.strip()
+
+        if not clause:
+            continue
+
+        clause_references = extract_figure_references(clause)
+
+        if figure_label not in clause_references:
+            continue
+
+        if len(clause_references) == 1:
+            return True
+
+        if re.search(
+            rf"\bin\s+fig(?:ure)?s?\.?\s*{re.escape(figure_label)}\s*[,]",
+            clause,
+            flags=re.IGNORECASE,
+        ):
+            return True
+
+    return False
+
+
+def extract_figure_specific_sentences(
+    text: str,
+    figure_label: str,
+) -> list[str]:
+    sentences: list[str] = []
+
+    for sentence in split_into_sentences(text):
+        if sentence_is_specific_to_figure(sentence, figure_label):
+            sentences.append(sentence)
+
+    return sentences
+
+
+def extract_figure_specific_text(
+    text: str,
+    figure_label: str,
+) -> str | None:
+    sentences = extract_figure_specific_sentences(text, figure_label)
+
+    if not sentences:
+        return None
+
+    return " ".join(sentences)
+
+
+def extract_figure_mention_sentences(
+    text: str,
+    figure_label: str,
+) -> list[str]:
+    sentences: list[str] = []
+
+    for sentence in split_into_sentences(text):
+        if figure_label in extract_figure_references(sentence):
+            sentences.append(sentence)
+
+    return sentences
+
+
+def extract_figure_mention_text(
+    text: str,
+    figure_label: str,
+) -> str | None:
+    sentences = extract_figure_mention_sentences(text, figure_label)
+
+    if not sentences:
+        return None
+
+    return " ".join(sentences)
+
+
+def is_relevant_context_paragraph(
+    paragraph: Paragraph,
+    figure: Figure,
+    figure_label: str,
+    anchor_paragraphs: list[Paragraph],
+) -> bool:
+    if paragraph.paragraph_id in figure.referenced_by_paragraph_ids:
+        return False
+
+    if (
+        paragraph.figure_references
+        and figure_label not in paragraph.figure_references
+    ):
+        return False
+
+    anchor_sections = {
+        tuple(anchor.section_path)
+        for anchor in anchor_paragraphs
+    }
+    same_section = tuple(paragraph.section_path) in anchor_sections
+    in_context_window = (
+        paragraph.paragraph_id in figure.context_paragraph_ids
+    )
+
+    if same_section and paragraph.xrd_score >= CONTEXT_SECTION_XRD_THRESHOLD:
+        return True
+
+    if not in_context_window:
+        return False
+
+    if same_section:
+        return paragraph.xrd_score >= CONTEXT_WINDOW_XRD_THRESHOLD
+
+    return (
+        paragraph.section_type in {"results", "methods"}
+        and paragraph.xrd_score >= CONTEXT_WINDOW_XRD_THRESHOLD
+    )
 
 
 def extract_peak_positions(text: str) -> list[float]:
@@ -963,28 +1299,14 @@ class TEIXRDParser:
         )
 
         for figure_element in figure_elements:
-            figure_id = figure_element.get(
-                "{http://www.w3.org/XML/1998/namespace}id"
+            grobid_figure_id = figure_element.get(XML_ID)
+            label, normalized_label, caption = figure_metadata_from_element(
+                figure_element
             )
-
-            label = xpath_text(
-                figure_element,
-                "./tei:head/tei:label[1]",
-            )
-
-            if not label:
-                label = xpath_text(
-                    figure_element,
-                    "./tei:label[1]",
-                )
-
-            caption_parts = xpath_all_text(
-                figure_element,
-                "./tei:figDesc | ./tei:head | ./tei:p",
-            )
-
-            caption = normalize_whitespace(
-                " ".join(dict.fromkeys(caption_parts))
+            figure_id = grobid_figure_id or resolve_one_based_figure_id(
+                grobid_figure_id=grobid_figure_id,
+                normalized_label=normalized_label,
+                caption=caption,
             )
 
             graphic_targets = [
@@ -1163,7 +1485,7 @@ class TEIXRDParser:
         self,
         figures: list[Figure],
         paragraphs: list[Paragraph],
-        context_window: int = 2,
+        context_window: int = CONTEXT_WINDOW,
     ) -> None:
         label_to_figure: dict[str, Figure] = {}
 
@@ -1246,11 +1568,11 @@ def build_xrd_records(
 ) -> list[dict[str, Any]]:
     """
     Build training-ready records where each likely XRD figure is paired
-    with the paragraphs that reference it or appear near its reference.
+    with explicitly mentioned text plus nearby relevant discussion.
     """
-    paragraph_map = {
-        paragraph.paragraph_id: paragraph
-        for paragraph in document.paragraphs
+    paragraph_index = {
+        paragraph.paragraph_id: index
+        for index, paragraph in enumerate(document.paragraphs)
     }
 
     records: list[dict[str, Any]] = []
@@ -1259,54 +1581,83 @@ def build_xrd_records(
         if not figure.is_likely_xrd:
             continue
 
-        context_paragraphs = [
-            paragraph_map[paragraph_id]
-            for paragraph_id in figure.context_paragraph_ids
-            if paragraph_id in paragraph_map
+        figure_label = figure.normalized_label
+
+        if not figure_label:
+            continue
+
+        anchor_paragraphs = [
+            paragraph
+            for paragraph in document.paragraphs
+            if paragraph.paragraph_id in figure.referenced_by_paragraph_ids
         ]
 
-        referencing_paragraphs = [
-            paragraph_map[paragraph_id]
-            for paragraph_id in figure.referenced_by_paragraph_ids
-            if paragraph_id in paragraph_map
-        ]
-
-        selected_paragraphs: list[Paragraph] = []
+        selected_entries: list[tuple[int, dict[str, Any]]] = []
         seen_ids: set[str] = set()
+        peak_positions: set[float] = set()
+        miller_indices: set[str] = set()
 
-        for paragraph in [
-            *referencing_paragraphs,
-            *context_paragraphs,
-        ]:
+        for paragraph in document.paragraphs:
+            if figure_label not in paragraph.figure_references:
+                continue
+
+            relevant_text = extract_figure_mention_text(
+                paragraph.text,
+                figure_label,
+            )
+
+            if not relevant_text:
+                continue
+
+            selected_entries.append(
+                (
+                    paragraph_index[paragraph.paragraph_id],
+                    {
+                        **asdict(paragraph),
+                        "relevant_text": relevant_text,
+                        "selection_reason": "explicit_figure_reference",
+                    },
+                )
+            )
+            seen_ids.add(paragraph.paragraph_id)
+            peak_positions.update(paragraph.peak_positions)
+            miller_indices.update(paragraph.miller_indices)
+
+        for paragraph in document.paragraphs:
             if paragraph.paragraph_id in seen_ids:
                 continue
 
-            seen_ids.add(paragraph.paragraph_id)
-
-            # Keep paragraphs that are explicitly linked, XRD-heavy, or
-            # from a results/discussion-like section.
-            if (
-                paragraph in referencing_paragraphs
-                or paragraph.xrd_score >= 1.5
-                or paragraph.section_type == "results"
+            if not is_relevant_context_paragraph(
+                paragraph=paragraph,
+                figure=figure,
+                figure_label=figure_label,
+                anchor_paragraphs=anchor_paragraphs,
             ):
-                selected_paragraphs.append(paragraph)
+                continue
 
-        peak_positions = sorted(
-            {
-                position
-                for paragraph in selected_paragraphs
-                for position in paragraph.peak_positions
-            }
-        )
+            selected_entries.append(
+                (
+                    paragraph_index[paragraph.paragraph_id],
+                    {
+                        **asdict(paragraph),
+                        "relevant_text": paragraph.text,
+                        "selection_reason": "contextual_relevance",
+                    },
+                )
+            )
+            seen_ids.add(paragraph.paragraph_id)
+            peak_positions.update(paragraph.peak_positions)
+            miller_indices.update(paragraph.miller_indices)
 
-        miller_indices = sorted(
-            {
-                index
-                for paragraph in selected_paragraphs
-                for index in paragraph.miller_indices
-            }
-        )
+        if not selected_entries:
+            continue
+
+        selected_entries.sort(key=lambda entry: entry[0])
+        analysis_paragraphs = [entry[1] for entry in selected_entries]
+        combined_parts = [
+            entry["relevant_text"]
+            for entry in analysis_paragraphs
+        ]
 
         records.append(
             {
@@ -1321,22 +1672,70 @@ def build_xrd_records(
                     ),
                 },
                 "figure": asdict(figure),
-                "analysis_paragraphs": [
-                    asdict(paragraph)
-                    for paragraph in selected_paragraphs
-                ],
-                "combined_analysis_text": "\n\n".join(
-                    paragraph.text
-                    for paragraph in selected_paragraphs
-                ),
+                "analysis_paragraphs": analysis_paragraphs,
+                "combined_analysis_text": "\n\n".join(combined_parts),
                 "extracted_features": {
-                    "peak_positions_degrees": peak_positions,
-                    "miller_indices": miller_indices,
+                    "peak_positions_degrees": sorted(peak_positions),
+                    "miller_indices": sorted(miller_indices),
                 },
             }
         )
 
     return records
+
+
+def figure_number_from_record(record: dict[str, Any]) -> int | str:
+    figure = record["figure"]
+    label = figure.get("normalized_label")
+
+    if label and str(label).isdigit():
+        return int(label)
+
+    figure_id = figure.get("figure_id") or ""
+    match = re.search(r"fig_(\d+)", figure_id, flags=re.IGNORECASE)
+
+    if match:
+        return int(match.group(1))
+
+    return label or figure_id or "unknown"
+
+
+def build_figure_analysis_dataset(
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    dataset: list[dict[str, Any]] = []
+
+    for record in records:
+        figure = record["figure"]
+        caption = normalize_whitespace(figure.get("caption") or "")
+        analysis = normalize_whitespace(
+            record.get("combined_analysis_text") or ""
+        )
+
+        if caption and analysis:
+            text = f"{caption} {analysis}"
+        else:
+            text = caption or analysis
+
+        if not text:
+            continue
+
+        dataset.append(
+            {
+                "figure": figure_number_from_record(record),
+                "caption": caption,
+                "text": text,
+            }
+        )
+
+    dataset.sort(
+        key=lambda entry: (
+            isinstance(entry["figure"], str),
+            entry["figure"],
+        )
+    )
+
+    return dataset
 
 
 def parse_pdf(
@@ -1349,7 +1748,9 @@ def parse_pdf(
 ) -> ParsedDocument:
     pdf_path = Path(pdf_path)
     output_directory = Path(output_directory)
+    extra_directory = output_directory / "extra"
     output_directory.mkdir(parents=True, exist_ok=True)
+    extra_directory.mkdir(parents=True, exist_ok=True)
 
     client = GrobidClient(base_url=grobid_url)
 
@@ -1362,8 +1763,9 @@ def parse_pdf(
     LOGGER.info("Sending %s to GROBID", pdf_path)
 
     tei_xml = client.process_fulltext(pdf_path)
+    tei_xml = reindex_tei_figure_ids(tei_xml)
 
-    tei_output_path = output_directory / f"{pdf_path.stem}.tei.xml"
+    tei_output_path = extra_directory / f"{pdf_path.stem}.tei.xml"
     tei_output_path.write_bytes(tei_xml)
 
     parser = TEIXRDParser()
@@ -1389,7 +1791,7 @@ def parse_pdf(
         )
 
     parsed_output_path = (
-        output_directory / f"{pdf_path.stem}.parsed.json"
+        extra_directory / f"{pdf_path.stem}.parsed.json"
     )
 
     with parsed_output_path.open("w", encoding="utf-8") as handle:
@@ -1403,7 +1805,7 @@ def parse_pdf(
     records = build_xrd_records(document)
 
     records_output_path = (
-        output_directory / f"{pdf_path.stem}.xrd_records.json"
+        extra_directory / f"{pdf_path.stem}.xrd_records.json"
     )
 
     with records_output_path.open("w", encoding="utf-8") as handle:
@@ -1414,9 +1816,24 @@ def parse_pdf(
             ensure_ascii=False,
         )
 
+    figure_analysis = build_figure_analysis_dataset(records)
+
+    figure_analysis_output_path = (
+        output_directory / f"{pdf_path.stem}.figure_analysis.json"
+    )
+
+    with figure_analysis_output_path.open("w", encoding="utf-8") as handle:
+        json.dump(
+            figure_analysis,
+            handle,
+            indent=2,
+            ensure_ascii=False,
+        )
+
     LOGGER.info("TEI XML: %s", tei_output_path)
     LOGGER.info("Parsed document: %s", parsed_output_path)
     LOGGER.info("XRD records: %s", records_output_path)
+    LOGGER.info("Figure analysis: %s", figure_analysis_output_path)
 
     return document
 

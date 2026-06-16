@@ -357,7 +357,7 @@
   ],
   "figures": [
     {
-      "figure_id": "fig_0",
+      "figure_id": "fig_1",
       "label": "1",
       "normalized_label": "1",
       "caption": "Figure 1 Figure 1 X-ray diffraction of rutile TiO 2 (a) micropowders and (b) nanopowders.",
@@ -365,32 +365,7 @@
       "coords": "2,50.99,664.39,195.60,10.52;2,93.48,678.53,146.65,9.12",
       "graphic_coords": null,
       "figure_type": null,
-      "xrd_score": 6.5,
-      "is_likely_xrd": true,
-      "image_paths": [
-        "grobid_output/ti02_powder/figures/fig_0.png"
-      ],
-      "referenced_by_paragraph_ids": [
-        "paragraph_378f2afe20bd"
-      ],
-      "context_paragraph_ids": [
-        "paragraph_5b0d784a1383",
-        "paragraph_06386a71086f",
-        "paragraph_378f2afe20bd",
-        "paragraph_00ba2d08a3fa",
-        "paragraph_819e136bc877"
-      ]
-    },
-    {
-      "figure_id": "fig_1",
-      "label": "2",
-      "normalized_label": "2",
-      "caption": "Figure 2 X Figure 2 X-ray diffraction of anatase TiO 2 (a) micropowders and (b) nanopowders.",
-      "graphic_targets": [],
-      "coords": "2,263.59,664.39,195.59,10.52;2,306.09,678.53,146.65,9.12",
-      "graphic_coords": null,
-      "figure_type": null,
-      "xrd_score": 6.5,
+      "xrd_score": 7.5,
       "is_likely_xrd": true,
       "image_paths": [
         "grobid_output/ti02_powder/figures/fig_1.png"
@@ -399,15 +374,46 @@
         "paragraph_378f2afe20bd"
       ],
       "context_paragraph_ids": [
+        "paragraph_aabe0d8c74d6",
+        "paragraph_bab7ee8ed270",
         "paragraph_5b0d784a1383",
         "paragraph_06386a71086f",
         "paragraph_378f2afe20bd",
         "paragraph_00ba2d08a3fa",
-        "paragraph_819e136bc877"
+        "paragraph_819e136bc877",
+        "paragraph_390bf0bbf224"
       ]
     },
     {
       "figure_id": "fig_2",
+      "label": "2",
+      "normalized_label": "2",
+      "caption": "Figure 2 X Figure 2 X-ray diffraction of anatase TiO 2 (a) micropowders and (b) nanopowders.",
+      "graphic_targets": [],
+      "coords": "2,263.59,664.39,195.59,10.52;2,306.09,678.53,146.65,9.12",
+      "graphic_coords": null,
+      "figure_type": null,
+      "xrd_score": 7.5,
+      "is_likely_xrd": true,
+      "image_paths": [
+        "grobid_output/ti02_powder/figures/fig_2.png"
+      ],
+      "referenced_by_paragraph_ids": [
+        "paragraph_378f2afe20bd"
+      ],
+      "context_paragraph_ids": [
+        "paragraph_aabe0d8c74d6",
+        "paragraph_bab7ee8ed270",
+        "paragraph_5b0d784a1383",
+        "paragraph_06386a71086f",
+        "paragraph_378f2afe20bd",
+        "paragraph_00ba2d08a3fa",
+        "paragraph_819e136bc877",
+        "paragraph_390bf0bbf224"
+      ]
+    },
+    {
+      "figure_id": "fig_3_2",
       "label": null,
       "normalized_label": null,
       "caption": "(3a) and (4a) are microscale with the grain size about 0.3-0.7 µm.",
@@ -432,7 +438,9 @@
       "figure_type": null,
       "xrd_score": 0.9,
       "is_likely_xrd": false,
-      "image_paths": [],
+      "image_paths": [
+        "grobid_output/ti02_powder/figures/fig_3.png"
+      ],
       "referenced_by_paragraph_ids": [],
       "context_paragraph_ids": []
     },
@@ -447,7 +455,9 @@
       "figure_type": null,
       "xrd_score": 0.9,
       "is_likely_xrd": false,
-      "image_paths": [],
+      "image_paths": [
+        "grobid_output/ti02_powder/figures/fig_4.png"
+      ],
       "referenced_by_paragraph_ids": [],
       "context_paragraph_ids": []
     }
