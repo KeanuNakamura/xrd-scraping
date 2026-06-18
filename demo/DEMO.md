@@ -9,3 +9,6 @@ This pdf parsing scripts demonstrates that it only parses figures that are relat
 Note that it will parse all figures if ran without the --xrd-figures-only tag
 
 In addition, the script will output an organized json file that contains, for each figure, a path, caption, and relevant context. (nanosized_powders/nanosized_powders.figure_analysis.json)
+
+
+<img width="857" height="763" alt="Screenshot 2026-06-17 at 5 44 32 PM" src="https://github.com/user-attachments/assets/590cc3b6-9267-40b1-b849-07f5c6b9bc2d" />
