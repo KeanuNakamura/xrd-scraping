@@ -103,31 +103,6 @@ docker run --rm \
 
 Kubernetes manifests under [`k8s/`](k8s/) are for advanced / batch deployments (shared GROBID service, Jobs, PVC output). Prefer Docker Compose for local use. See that directory for GROBID, storage, and Job examples that use `keanu375/xrd-pipeline:v3`.
 
----
-```
-
-## Usage
-
-### PDF → scrape → analysis (default)
-
-```bash
-export OPENAI_API_KEY=...
-
-python scripts/scrape_and_digitize.py paper.pdf output/
-python scripts/scrape_and_digitize.py pdf_files/ output/
-```
-
-For each PDF, writes `output/<stem>/`:
-
-| Path | Contents |
-|------|----------|
-| `xrd_figures/<id>.png` | Crops classified as XRD-related |
-| `non_xrd_figures/<id>.png` | Crops classified as not XRD |
-| `<stem>.figure_analysis.json` | Per-figure path, caption, paper context, and `analysis` metadata |
-| `extra/` | Original PDF plus GROBID TEI / parse records |
-
-Digitization is **off** unless you pass `--digitize`.
-
 ### Output shape
 
 Each entry in `<stem>.figure_analysis.json` looks like:
