@@ -8,13 +8,7 @@ PDF → GROBID parse → figure crops + captions + context
     → (optional) --digitize → calibrated CSV / preview PNGs
 ```
 
-**Recommended for new users:** run with Docker (no Python install, no local build). See [Quick Start with Docker](#quick-start-with-docker).
-
 ---
-
-## Quick Start with Docker
-
-You need [Docker Desktop](https://docs.docker.com/get-docker/) (macOS / Windows) or Docker Engine + the Compose plugin (Linux). You do **not** need to install Python or clone this repository to process PDFs — only Docker, an OpenAI API key, and a place to put input/output files.
 
 ### 1. Install Docker
 
@@ -55,10 +49,8 @@ curl http://localhost:8070/api/isalive
 ### 4. Set your OpenAI API key
 
 ```bash
-export OPENAI_API_KEY=sk-...   # your key; never commit this
+export OPENAI_API_KEY=sk-... 
 ```
-
-Compose reads `OPENAI_API_KEY` from your environment. Do not hardcode keys in `compose.yaml`.
 
 ### 5. Process PDFs
 
@@ -66,20 +58,6 @@ Process every PDF under `papers/` and write results to `results/`:
 
 ```bash
 docker compose run --rm xrd
-```
-
-Process a single file (paths are inside the container; `papers/` and `results/` are mounted from your host):
-
-```bash
-docker compose run --rm xrd python scripts/scrape_and_digitize.py \
-  papers/my_paper.pdf results/ --grobid-url http://grobid:8070 --overwrite
-```
-
-Optional digitization (same flags as local runs):
-
-```bash
-docker compose run --rm xrd python scripts/scrape_and_digitize.py \
-  papers/ results/ --grobid-url http://grobid:8070 --digitize
 ```
 
 ### Expected output
@@ -124,52 +102,6 @@ docker run --rm \
 ### Optional: Kubernetes
 
 Kubernetes manifests under [`k8s/`](k8s/) are for advanced / batch deployments (shared GROBID service, Jobs, PVC output). Prefer Docker Compose for local use. See that directory for GROBID, storage, and Job examples that use `keanu375/xrd-pipeline:v3`.
-
----
-
-## Local Development
-
-For contributors who want to edit the pipeline code locally:
-
-```bash
-git clone --recurse-submodules git@github.com:KeanuNakamura/xrd-digitization.git
-cd xrd-digitization
-python3 -m venv .venv && source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-If you already cloned without submodules: `git submodule update --init`.
-
-Requires a running [GROBID](https://grobid.readthedocs.io/) server (for example `docker compose up -d grobid`) and `OPENAI_API_KEY` for figure analysis.
-
-To rebuild the pipeline image from this source tree instead of pulling the published tag:
-
-```bash
-docker build -t xrd-pipeline:local .
-```
-
-## Usage
-
-### PDF → scrape → analysis (default)
-
-```bash
-export OPENAI_API_KEY=...
-
-python scripts/scrape_and_digitize.py paper.pdf output/
-python scripts/scrape_and_digitize.py pdf_files/ output/
-```
-
-For each PDF, writes `output/<stem>/`:
-
-| Path | Contents |
-|------|----------|
-| `xrd_figures/<id>.png` | Crops classified as XRD-related |
-| `non_xrd_figures/<id>.png` | Crops classified as not XRD |
-| `<stem>.figure_analysis.json` | Per-figure path, caption, paper context, and `analysis` metadata |
-| `extra/` | Original PDF plus GROBID TEI / parse records |
-
-Digitization is **off** unless you pass `--digitize`.
 
 ### Output shape
 
