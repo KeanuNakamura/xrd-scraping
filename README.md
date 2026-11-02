@@ -155,9 +155,6 @@ Each entry in `<stem>.figure_analysis.json` looks like:
   }
 }
 ```
-
-`composition` and `space_group` are literature-only lists (empty unless the paper states them). They appear at both figure and curve level.
-
 Paper-level synthesis (when available) is stored alongside as `paper_analysis`.
 
 See [`examples/scrape/`](examples/scrape/) for sample XRD crops and a portable JSON sketch, and [`examples/DEMO.md`](examples/DEMO.md) for a walkthrough.
