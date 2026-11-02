@@ -1,3 +1,5 @@
+# Optional helper for the PVC-based flow in xrd-storage.yaml.
+# Not needed when using k8s/run.sh (hostPath ./results is already on disk).
 apiVersion: v1
 kind: Pod
 metadata:

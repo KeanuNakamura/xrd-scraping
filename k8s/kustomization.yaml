@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Long-running cluster services. The XRD Job is applied separately via
+# k8s/run.sh so host papers/ and results/ paths can be injected.
+resources:
+  - grobid.yaml

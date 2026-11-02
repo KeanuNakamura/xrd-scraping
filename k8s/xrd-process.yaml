@@ -1,37 +1,37 @@
+# XRD pipeline Job — same I/O contract as compose.yaml:
+#   host papers/  → /app/papers  (read-only)
+#   host results/ → /app/results
+#
+# Do not apply this file directly. Use k8s/run.sh so the HOST_PAPERS /
+# HOST_RESULTS placeholders below become absolute paths on your machine.
 apiVersion: batch/v1
 kind: Job
-
 metadata:
-  name: xrd-process-demo-v3
-
+  name: xrd-process
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 1800
-
+  ttlSecondsAfterFinished: 600
   template:
     spec:
       restartPolicy: Never
-
       containers:
         - name: xrd
           image: keanu375/xrd-pipeline:v3
           imagePullPolicy: IfNotPresent
-
           command:
             - python
             - scripts/scrape_and_digitize.py
-            - demo/nanosized_powders.pdf
-            - output/
+            - papers/
+            - results/
             - --grobid-url
             - http://grobid:8070
-
           env:
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: xrd-openai
                   key: OPENAI_API_KEY
-
           resources:
             requests:
               memory: "512Mi"
@@ -39,19 +39,18 @@ spec:
             limits:
               memory: "2Gi"
               cpu: "2"
-
           volumeMounts:
-            - name: xrd-output-storage
-              mountPath: /app/output
-
-            - name: xrd-demo-input
-              mountPath: /app/demo
+            - name: papers
+              mountPath: /app/papers
               readOnly: true
-
+            - name: results
+              mountPath: /app/results
       volumes:
-        - name: xrd-output-storage
-          persistentVolumeClaim:
-            claimName: xrd-output
-        - name: xrd-demo-input
-          configMap:
-            name: xrd-demo-input
+        - name: papers
+          hostPath:
+            path: ${HOST_PAPERS}
+            type: Directory
+        - name: results
+          hostPath:
+            path: ${HOST_RESULTS}
+            type: DirectoryOrCreate

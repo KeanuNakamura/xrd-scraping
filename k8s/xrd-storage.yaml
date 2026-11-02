@@ -1,13 +1,15 @@
+# Optional: cluster-native output PVC (not used by the default hostPath flow).
+# Prefer ./k8s/run.sh which mounts the host ./papers and ./results directories
+# the same way docker compose does. Use this PVC only if you intentionally
+# replace the results hostPath volume in xrd-process.yaml for a multi-node
+# cluster without shared host directories.
 apiVersion: v1
 kind: PersistentVolumeClaim
-
 metadata:
   name: xrd-output
-
 spec:
   accessModes:
     - ReadWriteOnce
-
   resources:
     requests:
       storage: 2Gi

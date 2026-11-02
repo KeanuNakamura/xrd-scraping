@@ -101,7 +101,57 @@ docker run --rm \
 
 ### Optional: Kubernetes
 
-Kubernetes manifests under [`k8s/`](k8s/) are for advanced / batch deployments (shared GROBID service, Jobs, PVC output). Prefer Docker Compose for local use. See that directory for GROBID, storage, and Job examples that use `keanu375/xrd-pipeline:v3`.
+Same I/O as Compose: PDFs in `papers/`, results in `results/`. Prefer Compose for day-to-day local use; use this path for batch / cluster runs (Docker Desktop Kubernetes, kind, or minikube). Requires a local clone of the repo (manifests live under [`k8s/`](k8s/)).
+
+**Prerequisites**
+
+- `kubectl` pointed at a local cluster that can mount host directories
+- `envsubst` (macOS: `brew install gettext`)
+- Image `keanu375/xrd-pipeline:v3` available to the cluster (`docker pull` is enough on Docker Desktop)
+
+**1. Put PDFs in `papers/`**
+
+```bash
+mkdir -p papers results
+# copy PDFs into ./papers
+```
+
+**2. Deploy GROBID**
+
+```bash
+kubectl apply -k k8s/
+kubectl rollout status deployment/grobid --timeout=180s
+```
+
+**3. Create the OpenAI secret**
+
+```bash
+export OPENAI_API_KEY=sk-...
+kubectl create secret generic xrd-openai \
+  --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY"
+```
+
+**4. Run the pipeline**
+
+```bash
+./k8s/run.sh
+```
+
+`k8s/run.sh` mounts host `./papers` (read-only) and `./results` into the Job, runs:
+
+```text
+python scripts/scrape_and_digitize.py papers/ results/ --grobid-url http://grobid:8070
+```
+
+waits for completion, prints logs, and writes `results/<stem>/` on the host (same layout as Compose). Override paths with `XRD_PAPERS` / `XRD_RESULTS` if needed.
+
+**Cleanup**
+
+```bash
+kubectl delete job xrd-process --ignore-not-found
+kubectl delete -k k8s/
+kubectl delete secret xrd-openai --ignore-not-found
+```
 
 ### Output shape
 
