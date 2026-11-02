@@ -75,30 +75,6 @@ Digitization is **off** unless you pass `--digitize` (then XRD crops are triaged
 
 Stop GROBID when finished: `docker compose down`.
 
-### Alternative: `docker run` (no Compose file)
-
-Use this when GROBID is published on the host (`-p 8070:8070`). Containers reach the host via `host.docker.internal` (Docker Desktop; on Linux add `--add-host=host.docker.internal:host-gateway`).
-
-```bash
-mkdir -p papers results
-# copy PDFs into ./papers
-
-docker run -d --name grobid --init -p 8070:8070 grobid/grobid:0.9.0-crf
-
-# wait until: curl http://localhost:8070/api/isalive → true
-
-docker run --rm \
-  -e OPENAI_API_KEY \
-  -v "$PWD/papers:/app/papers:ro" \
-  -v "$PWD/results:/app/results" \
-  --add-host=host.docker.internal:host-gateway \
-  keanu375/xrd-pipeline:v3 \
-  python scripts/scrape_and_digitize.py papers/ results/ \
-  --grobid-url http://host.docker.internal:8070
-```
-
-**Networking:** with Docker Compose, use the service hostname `http://grobid:8070`. With separate `docker run` containers talking through the host port, use `http://host.docker.internal:8070`.
-
 ### Optional: Kubernetes
 
 Same I/O as Compose: PDFs in `papers/`, results in `results/`. Prefer Compose for day-to-day local use; use this path for batch / cluster runs (Docker Desktop Kubernetes, kind, or minikube). Requires a local clone of the repo (manifests live under [`k8s/`](k8s/)).
