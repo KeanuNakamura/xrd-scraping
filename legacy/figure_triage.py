@@ -7,6 +7,7 @@ native XRD digitizer or agent-guidance stack.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -23,15 +24,23 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "gpt-4.1-mini"
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_CACHE_DIR = Path(".cache") / "figure_triage"
+
+# Bump when classify/triage prompts or response schemas change (invalidates cache).
+XRD_CLASSIFY_PROMPT_VERSION = "v2_high_recall"
+TRIAGE_PROMPT_VERSION = "v1"
 
 HttpPost = Callable[..., Any]
 
 DigitizationRoute = Literal["single", "stacked", "multipanel", "unsupported", "reject"]
+ClassifyConfidence = Literal["high", "low"]
 
 XRD_CLASSIFY_SYSTEM_PROMPT = """\
 You classify scientific figure images from research papers.
 Return structured JSON only — no markdown fences.
 Decide whether the figure is XRD / X-ray diffraction related.
+Prioritize HIGH RECALL: when unsure, prefer keeping the figure for fuller
+analysis rather than discarding it.
 When a figure caption is provided, use it together with the image —
 especially when the crop alone is ambiguous.
 """
@@ -40,14 +49,22 @@ XRD_CLASSIFY_USER_PROMPT = """\
 Inspect this cropped figure image and return JSON with this schema:
 {
   "is_xrd": <bool>,
+  "confidence": "high" | "low",
   "reason": "<short explanation>"
 }
 
 Rules:
 - is_xrd is true if the image is (or clearly includes) an X-ray diffraction /
-  powder diffraction / PXRD / Rietveld / 2θ diffractogram plot. false for SEM,
-  TEM, FTIR, XPS, photographs, schematics, tables, or other non-XRD plots.
-  If a multi-panel crop mixes XRD and non-XRD panels, set is_xrd true.
+  powder diffraction / PXRD / Rietveld / 2θ / θ–2θ diffractogram plot.
+  false for clear SEM, TEM, FTIR, XPS, photographs, schematics, tables, or
+  other non-XRD plots.
+- Multi-panel / atypical figures: if ANY panel may be XRD, or the crop mixes
+  XRD with other modalities, set is_xrd=true. Prefer recall over precision.
+- confidence:
+  - "high" when the decision is clear from image and/or caption.
+  - "low" when ambiguous, atypical, low-res, multipanel with unclear panels,
+    partial axes, stick patterns that might be XRD, or caption/image conflict.
+  Downstream runs expensive enrichment on is_xrd=true OR confidence="low".
 - When a caption is supplied, weigh it with the image (e.g. captions mentioning
   XRD / PXRD / 2θ / diffraction support is_xrd=true; SEM/TEM/FTIR captions
   support false). Prefer the image if caption and image clearly conflict.
@@ -163,6 +180,7 @@ class CurveLabelHint:
 @dataclass
 class XrdClassifyResult:
     is_xrd: bool
+    confidence: ClassifyConfidence = "high"
     reason: str = ""
     raw: dict[str, Any] | None = None
 
@@ -171,6 +189,21 @@ class XrdClassifyResult:
         if self.raw is None:
             payload.pop("raw", None)
         return payload
+
+    @property
+    def uncertain(self) -> bool:
+        return self.confidence == "low"
+
+    @property
+    def needs_full_analysis(self) -> bool:
+        """High-recall gate: enrich confirmed XRD and uncertain crops."""
+        return bool(self.is_xrd) or self.uncertain
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any] | None) -> "XrdClassifyResult | None":
+        if not isinstance(payload, dict) or "is_xrd" not in payload:
+            return None
+        return parse_xrd_classify_payload(payload)
 
 
 @dataclass
@@ -405,11 +438,80 @@ def _normalize_api_key(raw: str | None) -> str | None:
 
 def parse_xrd_classify_payload(payload: dict[str, Any]) -> XrdClassifyResult:
     """Normalize an XRD-classification JSON object."""
+    raw_conf = str(payload.get("confidence") or "high").strip().lower()
+    confidence: ClassifyConfidence = "low" if raw_conf in {"low", "uncertain"} else "high"
+    # Legacy caches / callers without confidence: treat as high.
+    if "confidence" not in payload and payload.get("uncertain") is True:
+        confidence = "low"
     return XrdClassifyResult(
         is_xrd=bool(payload.get("is_xrd")),
+        confidence=confidence,
         reason=str(payload.get("reason") or "").strip(),
         raw=dict(payload),
     )
+
+
+def _cache_enabled(use_cache: bool | None = None) -> bool:
+    if use_cache is not None:
+        return bool(use_cache)
+    raw = os.environ.get("OPENAI_USE_CACHE")
+    if raw is None:
+        return True
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _triage_cache_dir() -> Path:
+    override = os.environ.get("OPENAI_CACHE_DIR") or os.environ.get(
+        "XRD_TRIAGE_CACHE_DIR"
+    )
+    if override:
+        return Path(override) / "figure_triage"
+    return DEFAULT_CACHE_DIR
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _image_content_hash(image_bgr: np.ndarray) -> str:
+    """Stable hash of PNG-encoded pixels (independent of filesystem path)."""
+    ok, buf = cv2.imencode(".png", image_bgr)
+    if not ok:
+        raise ValueError("Failed to encode image for cache key")
+    return _sha256_bytes(buf.tobytes())
+
+
+def _caption_hash(caption: str | None) -> str:
+    text = (caption or "").strip().encode("utf-8")
+    return _sha256_bytes(text)[:16] if text else "nocap"
+
+
+def _vision_disk_cache_path(
+    *,
+    kind: str,
+    image_hash: str,
+    model: str,
+    prompt_version: str,
+    caption_hash: str = "nocap",
+) -> Path:
+    safe_model = re.sub(r"[^\w.-]+", "_", model).strip("_") or "model"
+    name = f"{image_hash[:24]}_{safe_model}_{prompt_version}_{caption_hash}.json"
+    return _triage_cache_dir() / kind / name
+
+
+def _read_vision_cache(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_vision_cache(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def _openai_chat_json(
@@ -488,6 +590,19 @@ def _load_bgr_image(image: np.ndarray | str | Path) -> np.ndarray:
     return bgr
 
 
+def _effective_use_cache(
+    use_cache: bool | None,
+    *,
+    http_post: HttpPost | None,
+) -> bool:
+    """Disk-cache live API calls; skip cache for injected http_post unless forced on."""
+    if use_cache is not None:
+        return bool(use_cache)
+    if http_post is not None:
+        return False
+    return _cache_enabled(None)
+
+
 def call_openai_xrd_classify(
     image_bgr: np.ndarray,
     *,
@@ -497,20 +612,39 @@ def call_openai_xrd_classify(
     model: str | None = None,
     timeout_s: float = 120.0,
     http_post: HttpPost | None = None,
+    use_cache: bool | None = None,
 ) -> XrdClassifyResult:
     """Call an OpenAI-compatible vision endpoint for XRD vs non-XRD classification."""
+    model_name = model or os.environ.get("OPENAI_TRIAGE_MODEL") or DEFAULT_MODEL
+    cache_on = _effective_use_cache(use_cache, http_post=http_post)
+    cache_path = _vision_disk_cache_path(
+        kind="xrd_classify",
+        image_hash=_image_content_hash(image_bgr),
+        model=model_name,
+        prompt_version=XRD_CLASSIFY_PROMPT_VERSION,
+        caption_hash=_caption_hash(caption),
+    )
+    if cache_on:
+        cached = _read_vision_cache(cache_path)
+        if cached is not None:
+            LOGGER.info("XRD classify cache hit: %s", cache_path.name)
+            return parse_xrd_classify_payload(cached)
+
     payload = _openai_chat_json(
         image_bgr,
         system_prompt=XRD_CLASSIFY_SYSTEM_PROMPT,
         user_prompt=build_xrd_classify_user_prompt(caption=caption),
         api_key=api_key,
         base_url=base_url,
-        model=model,
+        model=model_name,
         timeout_s=timeout_s,
         http_post=http_post,
         missing_key_message="Missing OPENAI_API_KEY for XRD classification",
     )
-    return parse_xrd_classify_payload(payload)
+    result = parse_xrd_classify_payload(payload)
+    if cache_on:
+        _write_vision_cache(cache_path, result.to_dict())
+    return result
 
 
 def classify_xrd_figure_image(
@@ -521,6 +655,7 @@ def classify_xrd_figure_image(
     base_url: str | None = None,
     model: str | None = None,
     http_post: HttpPost | None = None,
+    use_cache: bool | None = None,
 ) -> XrdClassifyResult:
     """Classify whether a figure image is XRD-related via OpenAI vision."""
     return call_openai_xrd_classify(
@@ -530,6 +665,7 @@ def classify_xrd_figure_image(
         base_url=base_url,
         model=model,
         http_post=http_post,
+        use_cache=use_cache,
     )
 
 
@@ -541,20 +677,39 @@ def call_openai_triage(
     model: str | None = None,
     timeout_s: float = 120.0,
     http_post: HttpPost | None = None,
+    use_cache: bool | None = None,
 ) -> FigureTriageResult:
     """Call an OpenAI-compatible vision endpoint for figure triage."""
+    model_name = model or os.environ.get("OPENAI_TRIAGE_MODEL") or DEFAULT_MODEL
+    cache_on = _effective_use_cache(use_cache, http_post=http_post)
+    cache_path = _vision_disk_cache_path(
+        kind="triage",
+        image_hash=_image_content_hash(image_bgr),
+        model=model_name,
+        prompt_version=TRIAGE_PROMPT_VERSION,
+    )
+    if cache_on:
+        cached = _read_vision_cache(cache_path)
+        if cached is not None:
+            LOGGER.info("Triage cache hit: %s", cache_path.name)
+            return parse_triage_payload(cached)
+
     payload = _openai_chat_json(
         image_bgr,
         system_prompt=TRIAGE_SYSTEM_PROMPT,
         user_prompt=TRIAGE_USER_PROMPT,
         api_key=api_key,
         base_url=base_url,
-        model=model,
+        model=model_name,
         timeout_s=timeout_s,
         http_post=http_post,
         missing_key_message="Missing OPENAI_API_KEY for figure triage",
     )
-    return parse_triage_payload(payload)
+    result = parse_triage_payload(payload)
+    if cache_on:
+        # Store the raw model payload when available so re-parse stays consistent.
+        _write_vision_cache(cache_path, result.raw or result.to_dict())
+    return result
 
 
 def triage_figure_image(
@@ -564,6 +719,7 @@ def triage_figure_image(
     base_url: str | None = None,
     model: str | None = None,
     http_post: HttpPost | None = None,
+    use_cache: bool | None = None,
 ) -> FigureTriageResult:
     """Triage a figure image path or BGR array."""
     return call_openai_triage(
@@ -572,6 +728,7 @@ def triage_figure_image(
         base_url=base_url,
         model=model,
         http_post=http_post,
+        use_cache=use_cache,
     )
 
 

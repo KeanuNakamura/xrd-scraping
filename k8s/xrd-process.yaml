@@ -1,31 +1,97 @@
-# XRD pipeline Job — same I/O contract as compose.yaml:
-#   host papers/  → /app/papers  (read-only)
-#   host results/ → /app/results
+# XRD pipeline Job — one PDF per pod (Indexed).
+# Mounts PVC xrd-data subpaths (staged by k8s/run.sh):
+#   papers/  → /app/papers  (read-only)
+#   results/ → /app/results
 #
-# Do not apply this file directly. Use k8s/run.sh so the HOST_PAPERS /
-# HOST_RESULTS placeholders below become absolute paths on your machine.
+# Do not apply this file directly. Use k8s/run.sh so placeholders become
+# real values (completions, parallelism, deadline).
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: xrd-process
 spec:
-  backoffLimit: 0
-  activeDeadlineSeconds: 1800
+  completionMode: Indexed
+  completions: ${XRD_COMPLETIONS}
+  parallelism: ${XRD_PARALLELISM}
+  # GROBID can flap under load on laptops; allow a few index retries.
+  backoffLimitPerIndex: 3
+  activeDeadlineSeconds: ${XRD_DEADLINE}
   ttlSecondsAfterFinished: 600
   template:
     spec:
       restartPolicy: Never
+      initContainers:
+        - name: wait-grobid
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for GROBID at http://grobid:8070/api/isalive ..."
+              for i in $(seq 1 60); do
+                if wget -q -O- http://grobid:8070/api/isalive 2>/dev/null | grep -qi true; then
+                  echo "GROBID is ready."
+                  exit 0
+                fi
+                echo "  attempt $i/60: not ready, sleep 5s"
+                sleep 5
+              done
+              echo "GROBID did not become ready in time" >&2
+              exit 1
       containers:
         - name: xrd
           image: keanu375/xrd-pipeline:v3
           imagePullPolicy: IfNotPresent
+          # Pick papers[JOB_COMPLETION_INDEX] (same order as collect_pdf_paths)
+          # and process that single PDF into results/<stem>/.
           command:
             - python
-            - scripts/scrape_and_digitize.py
-            - papers/
-            - results/
-            - --grobid-url
-            - http://grobid:8070
+            - -c
+            - |
+              import os
+              import sys
+              import time
+              import urllib.request
+              from pathlib import Path
+
+              sys.path[:0] = ["/app", "/app/legacy", "/app/scripts"]
+              from pdf_parser import collect_pdf_paths
+
+              def wait_grobid(url: str, attempts: int = 30) -> None:
+                  alive = url.rstrip("/") + "/api/isalive"
+                  for i in range(1, attempts + 1):
+                      try:
+                          with urllib.request.urlopen(alive, timeout=5) as resp:
+                              body = resp.read().decode("utf-8", "ignore").strip().lower()
+                          if resp.status == 200 and "true" in body:
+                              print(f"GROBID ready ({alive})", flush=True)
+                              return
+                      except Exception as exc:
+                          print(f"GROBID wait {i}/{attempts}: {exc}", flush=True)
+                      time.sleep(5)
+                  raise SystemExit(f"GROBID not ready at {alive}")
+
+              wait_grobid("http://grobid:8070")
+
+              pdfs = collect_pdf_paths(Path("papers").resolve())
+              idx = int(os.environ["JOB_COMPLETION_INDEX"])
+              if idx < 0 or idx >= len(pdfs):
+                  raise SystemExit(
+                      f"JOB_COMPLETION_INDEX={idx} out of range for {len(pdfs)} PDF(s)"
+                  )
+              pdf = pdfs[idx]
+              print(f"Indexed worker {idx}/{len(pdfs)}: {pdf}", flush=True)
+              os.execvp(
+                  sys.executable,
+                  [
+                      sys.executable,
+                      "scripts/scrape_and_digitize.py",
+                      str(pdf),
+                      "results/",
+                      "--grobid-url",
+                      "http://grobid:8070",
+                  ],
+              )
           env:
             - name: OPENAI_API_KEY
               valueFrom:
@@ -40,17 +106,14 @@ spec:
               memory: "2Gi"
               cpu: "2"
           volumeMounts:
-            - name: papers
+            - name: xrd-data
               mountPath: /app/papers
+              subPath: papers
               readOnly: true
-            - name: results
+            - name: xrd-data
               mountPath: /app/results
+              subPath: results
       volumes:
-        - name: papers
-          hostPath:
-            path: ${HOST_PAPERS}
-            type: Directory
-        - name: results
-          hostPath:
-            path: ${HOST_RESULTS}
-            type: DirectoryOrCreate
+        - name: xrd-data
+          persistentVolumeClaim:
+            claimName: xrd-data

@@ -1,5 +1,5 @@
-# Optional helper for the PVC-based flow in xrd-storage.yaml.
-# Not needed when using k8s/run.sh (hostPath ./results is already on disk).
+# Optional helper to inspect PVC xrd-data (papers/ + results/).
+# Not required for k8s/run.sh, which stages/fetches via a short-lived pod.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -11,10 +11,9 @@ spec:
       image: alpine:3.20
       command: ["sleep", "3600"]
       volumeMounts:
-        - name: xrd-output-storage
+        - name: xrd-data
           mountPath: /data
-          readOnly: true
   volumes:
-    - name: xrd-output-storage
+    - name: xrd-data
       persistentVolumeClaim:
-        claimName: xrd-output
+        claimName: xrd-data

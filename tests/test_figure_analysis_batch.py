@@ -175,7 +175,19 @@ def test_enrich_moves_non_xrd_crops(tmp_path: Path):
             trends=[],
         )
 
+    sys.path.insert(0, str(ROOT / "legacy"))
+    from figure_triage import XrdClassifyResult
+
+    def fake_classify(image_path, **kwargs):
+        name = Path(image_path).name
+        if name == "fig_1.png":
+            return XrdClassifyResult(
+                is_xrd=False, confidence="high", reason="map"
+            )
+        return XrdClassifyResult(is_xrd=True, confidence="high", reason="xrd")
+
     sad.analyze_figure_image = fake_analyze
+    sad.classify_xrd_figure_image = fake_classify
     sad.enrich_figure_analysis_json(paper, client=object())
 
     data = json.loads(fa.read_text(encoding="utf-8"))
@@ -185,6 +197,7 @@ def test_enrich_moves_non_xrd_crops(tmp_path: Path):
     assert data["xrd_figures"] == 1
     assert data["figures"][0]["is_xrd"] is True
     assert data["figures"][0]["analysis"]["curves"][0]["peak_positions"] == [12.4, 26.6]
+    assert "paper_analysis" not in data
     # Empty literature fields are still present.
     analysis = data["figures"][0]["analysis"]
     assert analysis["composition"] == []

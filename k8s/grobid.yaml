@@ -1,3 +1,5 @@
+# Shared GROBID service. Keep replicas=1 on laptops (~2–4Gi each with -Xmx2g).
+# Override only on larger clusters: XRD_GROBID_REPLICAS=N ./k8s/run.sh
 apiVersion: apps/v1
 kind: Deployment
 

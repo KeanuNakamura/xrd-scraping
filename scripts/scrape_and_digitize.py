@@ -3,27 +3,35 @@
 Scrape PDF figures with GROBID, enrich with OpenAI vision analysis, optionally digitize.
 
 Default (no ``--digitize``): for each PDF, extract all figure crops and captions
-via GROBID, then run OpenAI vision metadata analysis on each crop and write the
-result under the ``analysis`` key in ``<stem>.figure_analysis.json``.
+via GROBID, then run a two-tier OpenAI path:
 
-With ``--digitize``: after scrape+analysis, ask OpenAI whether each crop is
-XRD-related (default: keep only XRD figures under ``xrd_figures/`` and move
-non-XRD crops to ``non_xrd_figures/``), triage curve layout (single / stacked /
-overlapping / multipanel), then call digitize_one_figure. Single-curve and
-stacked shared-x figures use the existing paths; multi-subplot figures are
-split into panel crops and digitized independently. Overlapping multi-curve
-figures are skipped as unsupported.
+1. cheap ``gpt-4.1-mini`` XRD classification (high recall) on every crop
+2. full ``gpt-4.1`` scientific enrichment only for confirmed or uncertain XRD
+
+Results are written under the ``analysis`` key in ``<stem>.figure_analysis.json``.
+Paper-level synthesis is opt-in via ``--paper-analysis``.
+
+With ``--digitize``: after scrape+analysis, reuse stored XRD classification
+when present (no second classify call), triage curve layout (single / stacked /
+overlapping / multipanel) with the triage model, then call digitize_one_figure.
+Single-curve and stacked shared-x figures use the existing paths; multi-subplot
+figures are split into panel crops and digitized independently. Overlapping
+multi-curve figures are skipped as unsupported.
 
 Pass ``--all-figures`` with ``--digitize`` to keep and triage every crop (skip
-the XRD filter).
+the XRD filter). GROBID XRD prefiltering remains optional via
+``--xrd-figures-only`` (disabled by default so coverage is not reduced).
 
 Examples::
 
-    # scrape + vision analysis only
+    # scrape + two-tier vision analysis only
     python scripts/scrape_and_digitize.py paper.pdf output_dir/
 
     # scrape + analysis + digitize
     python scripts/scrape_and_digitize.py paper.pdf output_dir/ --digitize
+
+    # also run paper-level synthesis
+    python scripts/scrape_and_digitize.py paper.pdf output_dir/ --paper-analysis
 
 Benchmark mode (``--benchmark``): extract every cropped figure, classify each
 with OpenAI as XRD or not, skip triage/digitization, and copy crops into
@@ -51,7 +59,13 @@ for path in (str(ROOT), str(LEGACY), str(SCRIPTS)):
 
 from digitize_figure import digitize_one_figure, figure_id_from_stem  # noqa: E402
 from figure_analysis import analyze_figure_image  # noqa: E402
+from figure_analysis.config import (  # noqa: E402
+    env_flag,
+    resolve_analysis_model,
+    resolve_triage_model,
+)
 from figure_triage import (  # noqa: E402
+    XrdClassifyResult,
     classify_xrd_figure_image,
     digitization_route,
     save_triage_result,
@@ -477,33 +491,88 @@ def recover_orphan_figure_images(
 
 
 def _vision_analysis_client(*, model: str | None = None):
-    """Shared OpenAI vision client for figure metadata analysis."""
+    """Shared OpenAI vision client for figure metadata analysis (gpt-4.1 by default)."""
     from figure_analysis.config import Config
     from figure_analysis.openai_client import OpenAIVisionClient
 
-    cfg = Config.from_env(model=model) if model else Config.from_env()
-    if model:
-        cfg.model = model
+    resolved = resolve_analysis_model(model)
+    cfg = Config.from_env(model=resolved)
+    cfg.model = resolved
     cfg.require_api_key()
     return OpenAIVisionClient(cfg)
+
+
+def load_figure_analysis_payload(paper_dir: Path) -> dict[str, Any] | None:
+    """Load ``*.figure_analysis.json`` as a dict, or None if missing/invalid."""
+    json_path = figure_analysis_json_path(paper_dir)
+    if json_path is None:
+        return None
+    try:
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def lookup_stored_xrd_classification(
+    paper_dir: Path,
+    *,
+    figure_id: str,
+    image_path: Path | None = None,
+) -> XrdClassifyResult | None:
+    """Reuse enrichment-time XRD classification for digitize (no second API call)."""
+    payload = load_figure_analysis_payload(paper_dir)
+    if payload is None:
+        return None
+    figures = figure_entries_from_analysis_payload(payload)
+    stem = Path(figure_id).stem
+    image_name = image_path.name if image_path is not None else None
+    for entry in figures:
+        if not isinstance(entry, dict):
+            continue
+        entry_id = str(entry.get("figure_id") or "")
+        entry_path = str(entry.get("figure_path") or "")
+        entry_stem = Path(entry_path).stem if entry_path else Path(entry_id).stem
+        entry_name = Path(entry_path).name if entry_path else ""
+        matched = (
+            entry_id in {figure_id, stem}
+            or entry_stem in {figure_id, stem}
+            or (image_name is not None and entry_name == image_name)
+        )
+        if not matched:
+            continue
+        stored = XrdClassifyResult.from_dict(entry.get("xrd_classification"))
+        if stored is not None:
+            return stored
+        # Enrichment already decided is_xrd without a nested classification block.
+        if "is_xrd" in entry:
+            return XrdClassifyResult(
+                is_xrd=bool(entry.get("is_xrd")),
+                confidence="high",
+                reason="reused from figure_analysis.is_xrd",
+            )
+    return None
 
 
 def enrich_figure_analysis_json(
     paper_dir: Path,
     *,
     model: str | None = None,
+    analysis_model: str | None = None,
+    triage_model: str | None = None,
     client: Any | None = None,
+    run_paper_analysis: bool | None = None,
+    http_post: Any | None = None,
 ) -> Path | None:
     """
-    Filter to image-backed figures, run vision XRD gate+analysis, rewrite JSON.
+    Two-tier vision enrichment: mini classify → full analysis on XRD/uncertain.
 
     Paper-level title/doi/authors are preserved. Only XRD figures remain in the
     JSON ``figures`` list; non-XRD crops are moved to ``non_xrd_figures/`` and
     omitted from the JSON. Remaining XRD crops stay under ``figures/`` until
     renamed to ``xrd_figures/``. ``figures_total`` / ``xrd_figures`` counts are
-    written at the document root. After all figure analyses complete, one
-    OpenAI call appends a top-level ``paper_analysis`` synthesis (failures
-    leave the figure-level JSON intact).
+    written at the document root. Optional ``--paper-analysis`` appends a
+    top-level ``paper_analysis`` synthesis (failures leave figure JSON intact).
     """
     from figure_analysis.analyzer import analysis_to_dataset_dict
 
@@ -528,8 +597,18 @@ def enrich_figure_analysis_json(
     figures = recover_orphan_figure_images(paper_dir, figures)
     figures_total = len(figures)
 
+    analysis_model_name = resolve_analysis_model(analysis_model or model)
+    triage_model_name = resolve_triage_model(triage_model)
+    do_paper = (
+        bool(run_paper_analysis)
+        if run_paper_analysis is not None
+        else env_flag("XRD_RUN_PAPER_ANALYSIS", False)
+    )
+
     vision_client = client
+    classified = 0
     analyzed = 0
+    gated_not_xrd = 0
     failed = 0
     missing = 0
     not_xrd = 0
@@ -561,9 +640,7 @@ def enrich_figure_analysis_json(
         if not entry.get("figure_id"):
             entry["figure_id"] = image_path.stem
 
-        if vision_client is None:
-            vision_client = _vision_analysis_client(model=model)
-
+        caption = str(entry.get("caption") or "") or None
         figure_number: int | None
         try:
             figure_number = (
@@ -572,6 +649,42 @@ def enrich_figure_analysis_json(
         except (TypeError, ValueError):
             figure_number = None
 
+        # Tier 1: cheap high-recall XRD gate (gpt-4.1-mini by default).
+        try:
+            xrd_cls = classify_xrd_figure_image(
+                image_path,
+                caption=caption,
+                model=triage_model_name,
+                http_post=http_post,
+            )
+            classified += 1
+            entry["xrd_classification"] = xrd_cls.to_dict()
+        except Exception as exc:
+            LOGGER.exception("XRD classification failed for %s; enriching anyway", image_path)
+            xrd_cls = XrdClassifyResult(
+                is_xrd=True,
+                confidence="low",
+                reason=f"classify_failed:{exc}",
+            )
+            entry["xrd_classification"] = xrd_cls.to_dict()
+            entry["classification_error"] = str(exc)
+
+        if not xrd_cls.needs_full_analysis:
+            not_xrd += 1
+            gated_not_xrd += 1
+            moved = move_crop_to_non_xrd_figures(paper_dir, image_path)
+            LOGGER.info(
+                "Figure %s (%s) gated as non-XRD (mini classify); moved to %s/",
+                entry.get("figure_id") or entry.get("figure"),
+                image_path.name,
+                NON_XRD_FIGURES_DIR if moved else EXTRACTED_FIGURES_DIR,
+            )
+            continue
+
+        # Tier 2: full scientific enrichment (gpt-4.1 by default).
+        if vision_client is None:
+            vision_client = _vision_analysis_client(model=analysis_model_name)
+
         try:
             result = analyze_figure_image(
                 image_path,
@@ -579,7 +692,7 @@ def enrich_figure_analysis_json(
                 cache_key=(
                     f"figure_analysis/{paper_cache_prefix}/{image_path.stem}"
                 ),
-                caption=str(entry.get("caption") or "") or None,
+                caption=caption,
                 text=str(entry.get("text") or "") or None,
                 figure_number=figure_number,
             )
@@ -589,7 +702,8 @@ def enrich_figure_analysis_json(
                 not_xrd += 1
                 moved = move_crop_to_non_xrd_figures(paper_dir, image_path)
                 LOGGER.info(
-                    "Figure %s (%s) classified as non-XRD; moved to %s/ and omitted from JSON",
+                    "Figure %s (%s) classified as non-XRD after full analysis; "
+                    "moved to %s/ and omitted from JSON",
                     entry.get("figure_id") or entry.get("figure"),
                     image_path.name,
                     NON_XRD_FIGURES_DIR if moved else EXTRACTED_FIGURES_DIR,
@@ -639,25 +753,25 @@ def enrich_figure_analysis_json(
         "figures": kept_figures,
     }
 
-    # One paper-level OpenAI synthesis after all figure analyses are done.
-    # On failure, keep the figure-level JSON unchanged (no paper_analysis field).
-    try:
-        from figure_analysis.analyzer import analyze_paper
+    # Optional paper-level OpenAI synthesis (compact XRD-only input).
+    if do_paper:
+        try:
+            from figure_analysis.analyzer import analyze_paper
 
-        if vision_client is None:
-            vision_client = _vision_analysis_client(model=model)
-        paper_result = analyze_paper(
-            out_payload,
-            client=vision_client,
-            cache_key=f"figure_analysis/{paper_cache_prefix}/paper",
-        )
-        out_payload["paper_analysis"] = paper_result.model_dump(mode="json")
-        LOGGER.info("Added paper_analysis to %s", json_path.name)
-    except Exception:
-        LOGGER.exception(
-            "Paper-level analysis failed for %s; preserving figure analyses",
-            paper_dir.name,
-        )
+            if vision_client is None:
+                vision_client = _vision_analysis_client(model=analysis_model_name)
+            paper_result = analyze_paper(
+                out_payload,
+                client=vision_client,
+                cache_key=f"figure_analysis/{paper_cache_prefix}/paper",
+            )
+            out_payload["paper_analysis"] = paper_result.model_dump(mode="json")
+            LOGGER.info("Added paper_analysis to %s", json_path.name)
+        except Exception:
+            LOGGER.exception(
+                "Paper-level analysis failed for %s; preserving figure analyses",
+                paper_dir.name,
+            )
 
     json_path.write_text(
         json.dumps(out_payload, indent=2, ensure_ascii=False),
@@ -665,15 +779,19 @@ def enrich_figure_analysis_json(
     )
     rename_figures_dir_to_xrd_figures(paper_dir)
     LOGGER.info(
-        "Enriched %s (figures_total=%d xrd_figures=%d analyzed=%d "
-        "not_xrd=%d missing=%d failed=%d)",
+        "Enriched %s (figures_total=%d xrd_figures=%d classified=%d "
+        "analyzed=%d gated_not_xrd=%d not_xrd=%d missing=%d failed=%d "
+        "paper_analysis=%s)",
         json_path.name,
         figures_total,
         xrd_figures,
+        classified,
         analyzed,
+        gated_not_xrd,
         not_xrd,
         missing,
         failed,
+        do_paper,
     )
     return json_path
 
@@ -990,6 +1108,7 @@ def process_multipanel_figure(
     http_post: Any | None = None,
 ) -> dict[str, Any]:
     """Split a multipanel figure and digitize each panel independently."""
+    triage_model_name = resolve_triage_model(model)
     caption, body_text = load_figure_text_context(paper_dir, figure_id=figure_id)
     split = split_figure_into_panels(
         staged_png,
@@ -997,7 +1116,7 @@ def process_multipanel_figure(
         figure_caption=caption,
         figure_body_text=body_text,
         output_dir=figure_dir,
-        model=model,
+        model=triage_model_name,
         http_post=http_post,
     )
 
@@ -1034,7 +1153,7 @@ def process_multipanel_figure(
         try:
             panel_triage = triage_figure_image(
                 record.image_path,
-                model=model,
+                model=triage_model_name,
                 http_post=http_post,
             )
         except Exception as exc:
@@ -1137,11 +1256,15 @@ def process_figure(
     http_post: Any | None = None,
     paper_dir: Path | None = None,
     xrd_only: bool = True,
+    triage_model: str | None = None,
+    prior_xrd_classification: XrdClassifyResult | None = None,
 ) -> dict[str, Any]:
-    """Classify XRD via OpenAI; digitize via digitize_one_figure when eligible.
+    """Reuse stored XRD classify when present; triage + digitize when eligible.
 
+    ``model`` is treated as the triage/classify model (gpt-4.1-mini by default).
     When ``xrd_only`` is True (default), non-XRD crops are moved to
-    ``non_xrd_figures/`` and recorded as ``skipped_not_xrd``.
+    ``non_xrd_figures/`` and recorded as ``skipped_not_xrd``. Uncertain
+    classifications are kept (high recall).
     """
     figure_id, figure_dir, staged_png = stage_figure_directory(png_path, figures_dir)
     entry: dict[str, Any] = {
@@ -1151,28 +1274,47 @@ def process_figure(
         "status": "pending",
     }
     resolved_paper_dir = Path(paper_dir) if paper_dir is not None else figures_dir.parent
+    triage_model_name = resolve_triage_model(triage_model or model)
 
     caption, _body_text = load_figure_text_context(
         resolved_paper_dir, figure_id=figure_id
     )
-    try:
-        xrd_cls = classify_xrd_figure_image(
-            staged_png,
-            caption=caption,
-            model=model,
-            http_post=http_post,
+    xrd_cls = prior_xrd_classification
+    if xrd_cls is None:
+        xrd_cls = lookup_stored_xrd_classification(
+            resolved_paper_dir,
+            figure_id=figure_id,
+            image_path=staged_png,
         )
-    except Exception as exc:
-        LOGGER.exception("XRD classification failed for %s", staged_png.name)
-        entry["status"] = "xrd_classify_failed"
-        entry["error"] = str(exc)
-        return entry
+    if xrd_cls is not None:
+        entry["xrd_classification_reused"] = True
+        LOGGER.info(
+            "Reusing stored XRD classification for %s (is_xrd=%s confidence=%s)",
+            figure_id,
+            xrd_cls.is_xrd,
+            xrd_cls.confidence,
+        )
+    else:
+        try:
+            xrd_cls = classify_xrd_figure_image(
+                staged_png,
+                caption=caption,
+                model=triage_model_name,
+                http_post=http_post,
+            )
+            entry["xrd_classification_reused"] = False
+        except Exception as exc:
+            LOGGER.exception("XRD classification failed for %s", staged_png.name)
+            entry["status"] = "xrd_classify_failed"
+            entry["error"] = str(exc)
+            return entry
 
     entry["xrd_classification"] = xrd_cls.to_dict()
     if caption:
         entry["figure_caption"] = caption
 
-    if xrd_only and not xrd_cls.is_xrd:
+    # High recall: only skip when confidently non-XRD.
+    if xrd_only and not xrd_cls.needs_full_analysis:
         LOGGER.info(
             "Skipping %s (not XRD): %s",
             figure_id,
@@ -1193,7 +1335,11 @@ def process_figure(
     entry["xrd_classify_path"] = str(classify_path)
 
     try:
-        triage = triage_figure_image(staged_png, model=model, http_post=http_post)
+        triage = triage_figure_image(
+            staged_png,
+            model=triage_model_name,
+            http_post=http_post,
+        )
     except Exception as exc:
         LOGGER.exception("Triage failed for %s", staged_png.name)
         entry["status"] = "triage_failed"
@@ -1237,7 +1383,7 @@ def process_figure(
                 figure_dir=figure_dir,
                 paper_dir=resolved_paper_dir,
                 figure_triage=triage,
-                model=model,
+                model=triage_model_name,
                 overwrite=overwrite,
                 http_post=http_post,
             )
@@ -1459,6 +1605,10 @@ def process_pdf(
     http_post: Any | None = None,
     xrd_only: bool = True,
     digitize: bool = False,
+    analysis_model: str | None = None,
+    triage_model: str | None = None,
+    run_paper_analysis: bool = False,
+    xrd_figures_only: bool = False,
 ) -> dict[str, Any]:
     """Scrape one PDF, enrich figure_analysis.json, optionally triage/digitize."""
     paper_dir = paper_output_dir(output_root, pdf_path)
@@ -1467,16 +1617,19 @@ def process_pdf(
         shutil.rmtree(paper_dir)
     paper_dir.mkdir(parents=True, exist_ok=True)
 
+    analysis_model_name = resolve_analysis_model(analysis_model or model)
+    triage_model_name = resolve_triage_model(triage_model)
+
     LOGGER.info("Scraping %s → %s", pdf_path.name, paper_dir)
-    # Extract every crop; vision analysis gates XRD vs non-XRD during enrichment.
-    # Digitize-path OpenAI classify/triage only runs when digitize=True.
+    # Default: extract every crop; two-tier vision gates XRD during enrichment.
+    # Optional GROBID prefilter via xrd_figures_only (off by default for recall).
     parse_pdf(
         pdf_path=pdf_path,
         output_directory=paper_dir,
         grobid_url=grobid_url,
         extract_figures=True,
         figure_dpi=figure_dpi,
-        xrd_figures_only=False,
+        xrd_figures_only=xrd_figures_only,
     )
 
     extracted_dir = paper_dir / EXTRACTED_FIGURES_DIR
@@ -1485,7 +1638,13 @@ def process_pdf(
 
     # Vision metadata enrichment while crops are still flat under figures/*.png.
     # Enrichment moves non-XRD → non_xrd_figures/ and renames figures/ → xrd_figures/.
-    analysis_json = enrich_figure_analysis_json(paper_dir, model=model)
+    analysis_json = enrich_figure_analysis_json(
+        paper_dir,
+        analysis_model=analysis_model_name,
+        triage_model=triage_model_name,
+        run_paper_analysis=run_paper_analysis,
+        http_post=http_post,
+    )
 
     if not digitize:
         manifest = {
@@ -1494,6 +1653,9 @@ def process_pdf(
             "digitize": False,
             "figure_analysis_json": str(analysis_json) if analysis_json else None,
             "figures_total": figures_total,
+            "analysis_model": analysis_model_name,
+            "triage_model": triage_model_name,
+            "paper_analysis": run_paper_analysis,
             "kept_xrd": None,
             "skipped_not_xrd": 0,
             "digitized": 0,
@@ -1504,7 +1666,7 @@ def process_pdf(
         manifest_path = paper_dir / "digitization_manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         LOGGER.info(
-            "Digitize skipped (pass --digitize to classify/triage/digitize). Wrote %s",
+            "Digitize skipped (pass --digitize to triage/digitize). Wrote %s",
             manifest_path,
         )
         return manifest
@@ -1519,7 +1681,8 @@ def process_pdf(
             process_figure(
                 png_path,
                 figures_dir=figures_dir,
-                model=model,
+                model=triage_model_name,
+                triage_model=triage_model_name,
                 overwrite=True,
                 http_post=http_post,
                 paper_dir=paper_dir,
@@ -1592,19 +1755,45 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--model",
+        "--analysis-model",
+        dest="analysis_model",
         default=None,
         help=(
-            "OpenAI vision model for figure analysis and (with --digitize) "
-            "XRD classification/triage (analysis default: gpt-4.1; "
-            "classify/triage default: gpt-4.1-mini)"
+            "OpenAI model for full scientific enrichment "
+            "(default: OPENAI_ANALYSIS_MODEL / OPENAI_MODEL / gpt-4.1). "
+            "Does not override classify/triage."
+        ),
+    )
+    parser.add_argument(
+        "--triage-model",
+        default=None,
+        help=(
+            "OpenAI model for XRD classification and layout/ClipDrop triage "
+            "(default: OPENAI_TRIAGE_MODEL / gpt-4.1-mini)"
+        ),
+    )
+    parser.add_argument(
+        "--paper-analysis",
+        action="store_true",
+        help=(
+            "Run optional paper-level XRD synthesis after figure enrichment "
+            "(also enabled by XRD_RUN_PAPER_ANALYSIS=1)"
+        ),
+    )
+    parser.add_argument(
+        "--xrd-figures-only",
+        action="store_true",
+        help=(
+            "Optional GROBID XRD prefilter before vision (disabled by default "
+            "to maximize figure coverage)"
         ),
     )
     parser.add_argument(
         "--digitize",
         action="store_true",
         help=(
-            "After scrape+analysis, run XRD classify/triage/digitize on cropped "
-            "figures (default: scrape and vision analysis only)"
+            "After scrape+analysis, run triage/digitize on cropped figures "
+            "(reuses enrichment XRD classification; default: scrape+analysis only)"
         ),
     )
     parser.add_argument(
@@ -1686,7 +1875,7 @@ def main(argv: list[str] | None = None) -> int:
                     overwrite=args.overwrite,
                     xrd_dir=xrd_dir,
                     not_xrd_dir=not_xrd_dir,
-                    model=args.model,
+                    model=resolve_triage_model(args.triage_model),
                 )
             else:
                 summary = process_pdf(
@@ -1694,10 +1883,17 @@ def main(argv: list[str] | None = None) -> int:
                     output_root,
                     grobid_url=args.grobid_url,
                     figure_dpi=args.figure_dpi,
-                    model=args.model,
+                    model=args.analysis_model,
+                    analysis_model=args.analysis_model,
+                    triage_model=args.triage_model,
                     overwrite=args.overwrite,
                     xrd_only=not args.all_figures,
                     digitize=args.digitize,
+                    run_paper_analysis=bool(
+                        args.paper_analysis
+                        or env_flag("XRD_RUN_PAPER_ANALYSIS", False)
+                    ),
+                    xrd_figures_only=args.xrd_figures_only,
                 )
         except Exception as exc:
             LOGGER.exception("Failed on %s", pdf_path)

@@ -17,6 +17,9 @@
 
 services:
   grobid:
+    # Do not set container_name here — Compose uses xrd_scraping-grobid-1 so a
+    # manual `docker run --name grobid` can coexist as an alternative (not both
+    # at once: both bind host port 8070).
     image: grobid/grobid:0.9.0-crf
     init: true
     ulimits:

@@ -254,8 +254,47 @@ Respond with valid JSON only.
 """
 
 
+_CAPTION_MAX_CHARS = 800
+_TEXT_MAX_CHARS = 1200
+
+
+def compact_paper_payload_for_analysis(paper_payload: dict) -> dict:
+    """Shrink paper JSON for synthesis: XRD analyses + short supporting text only."""
+    figures_in = paper_payload.get("figures") or []
+    compact_figures: list[dict] = []
+    if isinstance(figures_in, list):
+        for entry in figures_in:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("is_xrd") is False:
+                continue
+            analysis = entry.get("analysis")
+            if analysis is None and not entry.get("is_xrd"):
+                continue
+            caption = str(entry.get("caption") or "").strip()
+            text = str(entry.get("text") or "").strip()
+            compact_figures.append(
+                {
+                    "figure_id": entry.get("figure_id") or entry.get("figure"),
+                    "figure": entry.get("figure"),
+                    "caption": caption[:_CAPTION_MAX_CHARS],
+                    "text": text[:_TEXT_MAX_CHARS],
+                    "analysis": analysis,
+                }
+            )
+    return {
+        "title": paper_payload.get("title"),
+        "doi": paper_payload.get("doi"),
+        "authors": list(paper_payload.get("authors") or []),
+        "figures_total": paper_payload.get("figures_total"),
+        "xrd_figures": paper_payload.get("xrd_figures"),
+        "figures": compact_figures,
+    }
+
+
 def build_paper_user_prompt(paper_payload: dict) -> str:
-    """Assemble the paper-level synthesis prompt from the full analysis JSON."""
+    """Assemble the paper-level synthesis prompt from a compact analysis JSON."""
+    compact = compact_paper_payload_for_analysis(paper_payload)
     return "\n".join(
         [
             "Synthesize the XRD findings across all figures in this paper.",
@@ -271,8 +310,8 @@ def build_paper_user_prompt(paper_payload: dict) -> str:
             "Identical peak positions across samples may be real (intensity "
             "can differ).",
             "",
-            "Complete structured paper JSON:",
-            json.dumps(paper_payload, ensure_ascii=False, indent=2),
+            "Compact structured paper JSON (XRD figures + analyses only):",
+            json.dumps(compact, ensure_ascii=False, separators=(",", ":")),
             "",
             "Respond with JSON only.",
         ]

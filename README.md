@@ -4,8 +4,10 @@ Extract figures, captions, and surrounding context from scientific PDFs, then en
 
 ```
 PDF → GROBID parse → figure crops + captions + context
-    → OpenAI vision analysis → <stem>.figure_analysis.json
+    → mini XRD classify → full gpt-4.1 analysis (XRD/uncertain only)
+    → <stem>.figure_analysis.json
     → (optional) --digitize → calibrated CSV / preview PNGs
+    → (optional) --paper-analysis → paper_analysis synthesis
 ```
 
 ---
@@ -79,11 +81,29 @@ Stop GROBID when finished: `docker compose down`.
 
 Use this when GROBID is published on the host (`-p 8070:8070`). Containers reach the host via `host.docker.internal` (Docker Desktop; on Linux add `--add-host=host.docker.internal:host-gateway`).
 
+Compose and this manual path both bind host port **8070** and the manual container uses `--name grobid`, so only one GROBID should be running at a time. Free a previous run first if needed:
+
+```bash
+docker compose down          # stops Compose's xrd_scraping-grobid-1
+docker rm -f grobid          # removes a leftover manual container named grobid
+```
+
+Start GROBID (foreground — Ctrl+C stops and removes it; use a second terminal for the pipeline, or add `-d` to detach):
+
+```bash
+docker run --rm \
+  --init \
+  --ulimit core=0 \
+  --name grobid \
+  -p 8070:8070 \
+  grobid/grobid:0.9.0-crf
+```
+
+Then process PDFs:
+
 ```bash
 mkdir -p papers results
 # copy PDFs into ./papers
-
-docker run -d --name grobid --init -p 8070:8070 grobid/grobid:0.9.0-crf
 
 # wait until: curl http://localhost:8070/api/isalive → true
 
@@ -105,7 +125,7 @@ Same I/O as Compose: PDFs in `papers/`, results in `results/`. Prefer Compose fo
 
 **Prerequisites**
 
-- `kubectl` pointed at a local cluster that can mount host directories
+- `kubectl` pointed at a local cluster with a default StorageClass (Docker Desktop / kind / minikube)
 - `envsubst` (macOS: `brew install gettext`)
 - Image `keanu375/xrd-pipeline:v3` available to the cluster (`docker pull` is enough on Docker Desktop)
 
@@ -137,18 +157,16 @@ kubectl create secret generic xrd-openai \
 ./k8s/run.sh
 ```
 
-`k8s/run.sh` mounts host `./papers` (read-only) and `./results` into the Job, runs:
+`k8s/run.sh` stages host `./papers` into PVC `xrd-data`, runs an Indexed Job (one PDF per pod) against GROBID, then copies `results/<stem>/` back to the host (same layout as Compose). Override paths with `XRD_PAPERS` / `XRD_RESULTS` if needed.
 
-```text
-python scripts/scrape_and_digitize.py papers/ results/ --grobid-url http://grobid:8070
-```
-
-waits for completion, prints logs, and writes `results/<stem>/` on the host (same layout as Compose). Override paths with `XRD_PAPERS` / `XRD_RESULTS` if needed.
+Docker Desktop Kubernetes cannot mount macOS `/Users` via `hostPath`, so the PVC staging step is required there.
 
 **Cleanup**
 
 ```bash
 kubectl delete job xrd-process --ignore-not-found
+kubectl delete pod xrd-stage --ignore-not-found
+kubectl delete pvc xrd-data --ignore-not-found
 kubectl delete -k k8s/
 kubectl delete secret xrd-openai --ignore-not-found
 ```
@@ -182,7 +200,7 @@ Each entry in `<stem>.figure_analysis.json` looks like:
 
 `composition` and `space_group` are literature-only lists (empty unless the paper states them). They appear at both figure and curve level.
 
-Paper-level synthesis (when available) is stored alongside as `paper_analysis`.
+Paper-level synthesis is **opt-in** (`--paper-analysis`) and stored as `paper_analysis`.
 
 See [`examples/scrape/`](examples/scrape/) for sample XRD crops and a portable JSON sketch, and [`examples/DEMO.md`](examples/DEMO.md) for a walkthrough.
 
@@ -192,11 +210,25 @@ See [`examples/scrape/`](examples/scrape/) for sample XRD crops and a portable J
 |------|--------|
 | `--grobid-url URL` | GROBID base URL (default `http://localhost:8070`) |
 | `--figure-dpi N` | Render DPI for crops (default `300`) |
-| `--model NAME` | OpenAI vision model override |
+| `--analysis-model NAME` | Full enrichment model (default `gpt-4.1`; alias: `--model`) |
+| `--triage-model NAME` | Classify/triage model (default `gpt-4.1-mini`) |
+| `--paper-analysis` | Run optional paper-level XRD synthesis |
+| `--xrd-figures-only` | Optional GROBID XRD prefilter (off by default) |
 | `--overwrite` | Replace an existing `output/<stem>/` |
 | `--benchmark` | Crop all figures, classify XRD vs not, copy into global `xrd/` / `not_xrd/` (no digitize) |
-| `--digitize` | After scrape+analysis, triage and digitize XRD curves (bonus) |
+| `--digitize` | After scrape+analysis, triage and digitize XRD curves (reuses classify) |
 | `--all-figures` | With `--digitize`: digitize every crop, not only XRD-classified ones |
+
+```bash
+# scrape + two-tier analysis
+python scripts/scrape_and_digitize.py paper.pdf output/
+
+# + paper synthesis
+python scripts/scrape_and_digitize.py paper.pdf output/ --paper-analysis
+
+# + digitize (reuses enrichment classification)
+python scripts/scrape_and_digitize.py paper.pdf output/ --digitize
+```
 
 ### Analyze already-cropped figures
 
@@ -240,7 +272,7 @@ docker compose run --rm -e CLIPDROP_API_KEY xrd python scripts/scrape_and_digiti
   papers/ results/ --grobid-url http://grobid:8070 --digitize
 ```
 
-With `--digitize`, crops already under `xrd_figures/` are triaged and digitized (use `--all-figures` to also digitize `non_xrd_figures/`).
+With `--digitize`, crops under `xrd_figures/` are triaged and digitized using the stored XRD classification (use `--all-figures` to also digitize `non_xrd_figures/`).
 
 ### Digitize one PNG
 

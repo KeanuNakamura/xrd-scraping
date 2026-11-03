@@ -284,10 +284,21 @@ def test_paper_analysis_roundtrip():
 
 
 def test_paper_prompt_embeds_payload_and_rules():
-    payload = {"title": "Test", "figures": [{"figure_id": "fig_1"}]}
+    payload = {
+        "title": "Test",
+        "figures": [
+            {
+                "figure_id": "fig_1",
+                "is_xrd": True,
+                "caption": "PXRD of anatase",
+                "analysis": {"sample": "TiO2", "curves": []},
+            }
+        ],
+    }
     prompt = build_paper_user_prompt(payload)
     assert "fig_1" in prompt
     assert "Test" in prompt
+    assert "Compact structured paper JSON" in prompt
     assert "identical peak" in PAPER_SYSTEM_PROMPT.lower()
     assert "figure_id" in PAPER_SYSTEM_PROMPT
     assert "author_reported" in PAPER_SYSTEM_PROMPT

@@ -312,7 +312,11 @@ def analyze_paper(
     config=None,
     cache_key: Optional[str] = None,
 ) -> PaperAnalysis:
-    """Synthesize XRD findings across all figures for one paper (text-only)."""
+    """Synthesize XRD findings across all figures for one paper (text-only).
+
+    Input is compacted to XRD figure analyses + truncated supporting text
+    (see ``build_paper_user_prompt`` / ``compact_paper_payload_for_analysis``).
+    """
     if not isinstance(paper_payload, dict):
         raise TypeError(f"Expected dict paper payload, got {type(paper_payload)}")
 
@@ -332,7 +336,7 @@ def analyze_paper(
         schema_model=PaperAnalysis,
         images=[],
         cache_key=key,
-        cache_name="paper_analysis_v2.json",
+        cache_name="paper_analysis_v3.json",
         system=PAPER_SYSTEM_PROMPT,
     )
     elapsed = time.time() - t0

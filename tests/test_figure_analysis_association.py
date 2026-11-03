@@ -279,12 +279,24 @@ def test_enrich_analyzes_orphan_xrd_and_dedupes_rerun(tmp_path: Path):
             )
         return FigureAnalysisResult(is_xrd=False)
 
+    from figure_triage import XrdClassifyResult
+
+    def fake_classify(image_path, **kwargs):
+        name = Path(image_path).name
+        if name == "fig_7_2.png":
+            return XrdClassifyResult(
+                is_xrd=False, confidence="high", reason="non-xrd orphan"
+            )
+        return XrdClassifyResult(is_xrd=True, confidence="high", reason="xrd")
+
     sad.analyze_figure_image = fake_analyze
+    sad.classify_xrd_figure_image = fake_classify
     sad.enrich_figure_analysis_json(paper, client=object())
 
     data = json.loads(fa.read_text(encoding="utf-8"))
+    # Two-tier: confident non-XRD is gated before full analysis.
     assert "fig_1_2.png" in calls
-    assert "fig_7_2.png" in calls
+    assert "fig_7_2.png" not in calls
     assert len(data["figures"]) == 1
     assert data["figures"][0]["is_xrd"] is True
     assert Path(data["figures"][0]["figure_path"]).name == "fig_1_2.png"
@@ -308,13 +320,22 @@ def test_enrich_analyzes_orphan_xrd_and_dedupes_rerun(tmp_path: Path):
 
 
 def test_enrich_cache_keys_differ_across_papers(tmp_path: Path):
+    from figure_triage import XrdClassifyResult
+
     keys: list[str] = []
 
     def fake_analyze(image_path, **kwargs):
         keys.append(str(kwargs.get("cache_key") or ""))
         return FigureAnalysisResult(is_xrd=False)
 
+    def fake_classify(image_path, **kwargs):
+        # Force full analysis so cache keys are still exercised.
+        return XrdClassifyResult(
+            is_xrd=False, confidence="low", reason="uncertain"
+        )
+
     sad.analyze_figure_image = fake_analyze
+    sad.classify_xrd_figure_image = fake_classify
 
     for name in ("paper_a", "paper_b"):
         paper = tmp_path / name
