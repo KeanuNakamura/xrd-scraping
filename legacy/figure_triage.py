@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -26,9 +27,17 @@ DEFAULT_MODEL = "gpt-4.1-mini"
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_CACHE_DIR = Path(".cache") / "figure_triage"
 
-# Bump when classify/triage prompts or response schemas change (invalidates cache).
-XRD_CLASSIFY_PROMPT_VERSION = "v2_high_recall"
-TRIAGE_PROMPT_VERSION = "v1"
+# Re-export version pins (canonical copies live in figure_analysis.versions).
+try:
+    from figure_analysis.versions import (  # noqa: E402
+        COMBINED_CLASSIFY_TRIAGE_PROMPT_VERSION,
+        TRIAGE_PROMPT_VERSION,
+        XRD_CLASSIFY_PROMPT_VERSION,
+    )
+except ImportError:  # pragma: no cover - script path bootstrap fallback
+    XRD_CLASSIFY_PROMPT_VERSION = "v3_caption_hints"
+    TRIAGE_PROMPT_VERSION = "v1"
+    COMBINED_CLASSIFY_TRIAGE_PROMPT_VERSION = "v1_combined"
 
 HttpPost = Callable[..., Any]
 
@@ -74,13 +83,72 @@ Rules:
 
 def build_xrd_classify_user_prompt(*, caption: str | None = None) -> str:
     """Assemble the XRD classify user prompt with optional caption context."""
-    caption_clean = (caption or "").strip()
-    if not caption_clean:
-        return XRD_CLASSIFY_USER_PROMPT
-    return (
-        f"{XRD_CLASSIFY_USER_PROMPT.rstrip()}\n\n"
-        f"Figure caption:\n{caption_clean}\n"
+    from figure_analysis.caption_hints import (
+        caption_hint_prompt_clause,
+        caption_xrd_hint,
     )
+
+    caption_clean = (caption or "").strip()
+    parts = [XRD_CLASSIFY_USER_PROMPT.rstrip()]
+    if caption_clean:
+        parts.append(f"\n\nFigure caption:\n{caption_clean}\n")
+        hint_clause = caption_hint_prompt_clause(caption_xrd_hint(caption_clean))
+        if hint_clause:
+            parts.append(f"\n{hint_clause}\n")
+    return "".join(parts)
+
+
+COMBINED_SYSTEM_PROMPT = """\
+You classify scientific figure images for an XRD digitization pipeline.
+Return structured JSON only — no markdown fences.
+Decide whether the figure is XRD-related (high recall) AND, when it may be
+XRD, triage digitizability / curve layout for PlotDigitizer routing.
+"""
+
+COMBINED_USER_PROMPT = """\
+Inspect this cropped figure image and return JSON with this schema:
+{
+  "is_xrd": <bool>,
+  "confidence": "high" | "low",
+  "classify_reason": "<short explanation>",
+  "digitizable": <bool>,
+  "curve_count": <int>,
+  "curve_layout": "single" | "multiple_stacked" | "multiple_overlapping" | "multiple_subplots" | "not_applicable",
+  "shared_x_axis": <bool>,
+  "vertically_offset": <bool>,
+  "curves_cross": <bool>,
+  "needs_clipdrop": <bool>,
+  "curve_labels": [{"text": "<label>", "vertical_order": <int>}, ...],
+  "triage_reason": "<short explanation>"
+}
+
+XRD classification rules (high recall):
+- is_xrd true if the image is or clearly includes an XRD / PXRD / 2θ diffractogram.
+- Multi-panel: if ANY panel may be XRD, set is_xrd=true.
+- confidence "low" when ambiguous; downstream enrichment runs on is_xrd=true OR low confidence.
+
+Digitization triage rules (same as standalone triage):
+- digitizable true for single-curve or vertically stacked shared-x non-crossing traces.
+- Fill layout / clipdrop / curve_labels even when is_xrd is uncertain.
+- If clearly non-XRD with high confidence, set digitizable=false and
+  curve_layout="not_applicable".
+"""
+
+
+def build_combined_user_prompt(*, caption: str | None = None) -> str:
+    from figure_analysis.caption_hints import (
+        caption_hint_prompt_clause,
+        caption_xrd_hint,
+    )
+
+    caption_clean = (caption or "").strip()
+    parts = [COMBINED_USER_PROMPT.rstrip()]
+    if caption_clean:
+        parts.append(f"\n\nFigure caption:\n{caption_clean}\n")
+        hint_clause = caption_hint_prompt_clause(caption_xrd_hint(caption_clean))
+        if hint_clause:
+            parts.append(f"\n{hint_clause}\n")
+    return "".join(parts)
 
 
 PREPROCESSING_REASONS = frozenset(
@@ -514,6 +582,24 @@ def _write_vision_cache(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def _retry_wait_seconds(attempt: int, *, retry_after: float | None = None) -> float:
+    """Exponential backoff with optional Retry-After override (capped)."""
+    if retry_after is not None and retry_after > 0:
+        return min(float(retry_after), 60.0)
+    return min(2.0 ** attempt, 30.0)
+
+
+def _response_retry_after_s(response: Any) -> float | None:
+    try:
+        headers = getattr(response, "headers", None) or {}
+        raw = headers.get("Retry-After") or headers.get("retry-after")
+        if raw is None:
+            return None
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _openai_chat_json(
     image_bgr: np.ndarray,
     *,
@@ -525,8 +611,13 @@ def _openai_chat_json(
     timeout_s: float = 120.0,
     http_post: HttpPost | None = None,
     missing_key_message: str = "Missing OPENAI_API_KEY",
+    max_retries: int = 3,
 ) -> dict[str, Any]:
-    """POST a vision chat.completions request and return parsed JSON content."""
+    """POST a vision chat.completions request and return parsed JSON content.
+
+    Retries on HTTP 429 / 5xx with exponential backoff. Injected ``http_post``
+    callables (tests) are not retried unless they raise/return those statuses.
+    """
     key = _normalize_api_key(api_key or os.environ.get("OPENAI_API_KEY"))
     if not key:
         raise RuntimeError(missing_key_message)
@@ -560,21 +651,72 @@ def _openai_chat_json(
         "Content-Type": "application/json",
     }
     post = http_post or requests.post
-    response = post(
-        f"{url_base}/chat/completions",
-        headers=headers,
-        json=body,
-        timeout=timeout_s,
-    )
-    response.raise_for_status()
-    data = response.json()
-    try:
-        content = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise ValueError(f"Unexpected OpenAI response shape: {data!r}") from exc
-    if not isinstance(content, str):
-        raise ValueError("OpenAI message content must be a string")
-    return _parse_json_content(content)
+    attempts = max(1, int(max_retries))
+    last_exc: Exception | None = None
+
+    for attempt in range(attempts):
+        try:
+            response = post(
+                f"{url_base}/chat/completions",
+                headers=headers,
+                json=body,
+                timeout=timeout_s,
+            )
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last_exc = exc
+            if attempt + 1 >= attempts:
+                raise
+            wait_s = _retry_wait_seconds(attempt)
+            LOGGER.warning(
+                "OpenAI connection error (attempt %d/%d); retry in %.1fs: %s",
+                attempt + 1,
+                attempts,
+                wait_s,
+                exc,
+            )
+            time.sleep(wait_s)
+            continue
+
+        status = int(getattr(response, "status_code", 0) or 0)
+        if status in {429, 500, 502, 503, 504} and attempt + 1 < attempts:
+            wait_s = _retry_wait_seconds(
+                attempt, retry_after=_response_retry_after_s(response)
+            )
+            LOGGER.warning(
+                "OpenAI HTTP %s (attempt %d/%d); retry in %.1fs",
+                status,
+                attempt + 1,
+                attempts,
+                wait_s,
+            )
+            time.sleep(wait_s)
+            continue
+
+        response.raise_for_status()
+        data = response.json()
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError(f"Unexpected OpenAI response shape: {data!r}") from exc
+        if not isinstance(content, str):
+            raise ValueError("OpenAI message content must be a string")
+        return _parse_json_content(content)
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("OpenAI request failed after retries")
+
+
+def _prepare_classify_image(
+    image_bgr: np.ndarray,
+    *,
+    max_side: int | None = None,
+) -> np.ndarray:
+    """Optionally downscale for cheap classify/combined calls."""
+    from figure_analysis.image_util import downscale_bgr, resolve_classify_max_side
+
+    side = resolve_classify_max_side(max_side)
+    return downscale_bgr(image_bgr, max_side=side)
 
 
 def _load_bgr_image(image: np.ndarray | str | Path) -> np.ndarray:
@@ -613,25 +755,32 @@ def call_openai_xrd_classify(
     timeout_s: float = 120.0,
     http_post: HttpPost | None = None,
     use_cache: bool | None = None,
+    max_side: int | None = None,
+    metrics: Any | None = None,
 ) -> XrdClassifyResult:
     """Call an OpenAI-compatible vision endpoint for XRD vs non-XRD classification."""
     model_name = model or os.environ.get("OPENAI_TRIAGE_MODEL") or DEFAULT_MODEL
+    vision_bgr = _prepare_classify_image(image_bgr, max_side=max_side)
     cache_on = _effective_use_cache(use_cache, http_post=http_post)
+    # Hash the (possibly downscaled) pixels so cache keys match the API input.
     cache_path = _vision_disk_cache_path(
         kind="xrd_classify",
-        image_hash=_image_content_hash(image_bgr),
+        image_hash=_image_content_hash(vision_bgr),
         model=model_name,
         prompt_version=XRD_CLASSIFY_PROMPT_VERSION,
         caption_hash=_caption_hash(caption),
     )
+    t0 = time.time()
     if cache_on:
         cached = _read_vision_cache(cache_path)
         if cached is not None:
             LOGGER.info("XRD classify cache hit: %s", cache_path.name)
+            if metrics is not None:
+                metrics.add_stage("classify", seconds=time.time() - t0, cache_hits=1)
             return parse_xrd_classify_payload(cached)
 
     payload = _openai_chat_json(
-        image_bgr,
+        vision_bgr,
         system_prompt=XRD_CLASSIFY_SYSTEM_PROMPT,
         user_prompt=build_xrd_classify_user_prompt(caption=caption),
         api_key=api_key,
@@ -644,6 +793,8 @@ def call_openai_xrd_classify(
     result = parse_xrd_classify_payload(payload)
     if cache_on:
         _write_vision_cache(cache_path, result.to_dict())
+    if metrics is not None:
+        metrics.add_stage("classify", seconds=time.time() - t0, api_calls=1)
     return result
 
 
@@ -656,6 +807,8 @@ def classify_xrd_figure_image(
     model: str | None = None,
     http_post: HttpPost | None = None,
     use_cache: bool | None = None,
+    max_side: int | None = None,
+    metrics: Any | None = None,
 ) -> XrdClassifyResult:
     """Classify whether a figure image is XRD-related via OpenAI vision."""
     return call_openai_xrd_classify(
@@ -666,6 +819,8 @@ def classify_xrd_figure_image(
         model=model,
         http_post=http_post,
         use_cache=use_cache,
+        max_side=max_side,
+        metrics=metrics,
     )
 
 
@@ -678,20 +833,25 @@ def call_openai_triage(
     timeout_s: float = 120.0,
     http_post: HttpPost | None = None,
     use_cache: bool | None = None,
+    metrics: Any | None = None,
 ) -> FigureTriageResult:
     """Call an OpenAI-compatible vision endpoint for figure triage."""
     model_name = model or os.environ.get("OPENAI_TRIAGE_MODEL") or DEFAULT_MODEL
     cache_on = _effective_use_cache(use_cache, http_post=http_post)
+    # Triage keeps full resolution for layout / label reading quality.
     cache_path = _vision_disk_cache_path(
         kind="triage",
         image_hash=_image_content_hash(image_bgr),
         model=model_name,
         prompt_version=TRIAGE_PROMPT_VERSION,
     )
+    t0 = time.time()
     if cache_on:
         cached = _read_vision_cache(cache_path)
         if cached is not None:
             LOGGER.info("Triage cache hit: %s", cache_path.name)
+            if metrics is not None:
+                metrics.add_stage("triage", seconds=time.time() - t0, cache_hits=1)
             return parse_triage_payload(cached)
 
     payload = _openai_chat_json(
@@ -709,6 +869,8 @@ def call_openai_triage(
     if cache_on:
         # Store the raw model payload when available so re-parse stays consistent.
         _write_vision_cache(cache_path, result.raw or result.to_dict())
+    if metrics is not None:
+        metrics.add_stage("triage", seconds=time.time() - t0, api_calls=1)
     return result
 
 
@@ -720,6 +882,7 @@ def triage_figure_image(
     model: str | None = None,
     http_post: HttpPost | None = None,
     use_cache: bool | None = None,
+    metrics: Any | None = None,
 ) -> FigureTriageResult:
     """Triage a figure image path or BGR array."""
     return call_openai_triage(
@@ -729,6 +892,147 @@ def triage_figure_image(
         model=model,
         http_post=http_post,
         use_cache=use_cache,
+        metrics=metrics,
+    )
+
+
+def parse_combined_classify_triage_payload(
+    payload: dict[str, Any],
+) -> tuple[XrdClassifyResult, FigureTriageResult]:
+    """Split a combined classify+triage JSON object into the two result types."""
+    classify = parse_xrd_classify_payload(
+        {
+            "is_xrd": payload.get("is_xrd"),
+            "confidence": payload.get("confidence"),
+            "reason": payload.get("classify_reason") or payload.get("reason") or "",
+        }
+    )
+    triage_payload = {
+        "digitizable": payload.get("digitizable"),
+        "curve_count": payload.get("curve_count"),
+        "curve_layout": payload.get("curve_layout"),
+        "shared_x_axis": payload.get("shared_x_axis"),
+        "vertically_offset": payload.get("vertically_offset"),
+        "curves_cross": payload.get("curves_cross"),
+        "needs_clipdrop": payload.get("needs_clipdrop"),
+        "curve_labels": payload.get("curve_labels"),
+        "reason": payload.get("triage_reason") or payload.get("reason") or "",
+    }
+    triage = parse_triage_payload(triage_payload)
+    return classify, triage
+
+
+def call_openai_classify_and_triage(
+    image_bgr: np.ndarray,
+    *,
+    caption: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    model: str | None = None,
+    timeout_s: float = 120.0,
+    http_post: HttpPost | None = None,
+    use_cache: bool | None = None,
+    max_side: int | None = None,
+    metrics: Any | None = None,
+) -> tuple[XrdClassifyResult, FigureTriageResult]:
+    """Single vision call returning XRD classification + digitization triage."""
+    model_name = model or os.environ.get("OPENAI_TRIAGE_MODEL") or DEFAULT_MODEL
+    vision_bgr = _prepare_classify_image(image_bgr, max_side=max_side)
+    cache_on = _effective_use_cache(use_cache, http_post=http_post)
+    cache_path = _vision_disk_cache_path(
+        kind="classify_triage",
+        image_hash=_image_content_hash(vision_bgr),
+        model=model_name,
+        prompt_version=COMBINED_CLASSIFY_TRIAGE_PROMPT_VERSION,
+        caption_hash=_caption_hash(caption),
+    )
+    t0 = time.time()
+    if cache_on:
+        cached = _read_vision_cache(cache_path)
+        if cached is not None:
+            LOGGER.info("Combined classify+triage cache hit: %s", cache_path.name)
+            if metrics is not None:
+                metrics.add_stage("combined", seconds=time.time() - t0, cache_hits=1)
+            return parse_combined_classify_triage_payload(cached)
+
+    payload = _openai_chat_json(
+        vision_bgr,
+        system_prompt=COMBINED_SYSTEM_PROMPT,
+        user_prompt=build_combined_user_prompt(caption=caption),
+        api_key=api_key,
+        base_url=base_url,
+        model=model_name,
+        timeout_s=timeout_s,
+        http_post=http_post,
+        missing_key_message="Missing OPENAI_API_KEY for classify+triage",
+    )
+    classify, triage = parse_combined_classify_triage_payload(payload)
+    if cache_on:
+        _write_vision_cache(
+            cache_path,
+            {
+                "is_xrd": classify.is_xrd,
+                "confidence": classify.confidence,
+                "classify_reason": classify.reason,
+                "digitizable": triage.digitizable,
+                "curve_count": triage.curve_count,
+                "curve_layout": triage.curve_layout,
+                "shared_x_axis": triage.shared_x_axis,
+                "vertically_offset": triage.vertically_offset,
+                "curves_cross": triage.curves_cross,
+                "needs_clipdrop": triage.needs_clipdrop,
+                "curve_labels": [
+                    {"text": c.text, "vertical_order": c.vertical_order}
+                    for c in triage.curve_labels
+                ],
+                "triage_reason": triage.reason,
+            },
+        )
+        # Also populate standalone caches so later classify-only / triage-only
+        # resume paths can reuse this result without another API call.
+        classify_cache = _vision_disk_cache_path(
+            kind="xrd_classify",
+            image_hash=_image_content_hash(vision_bgr),
+            model=model_name,
+            prompt_version=XRD_CLASSIFY_PROMPT_VERSION,
+            caption_hash=_caption_hash(caption),
+        )
+        triage_cache = _vision_disk_cache_path(
+            kind="triage",
+            image_hash=_image_content_hash(image_bgr),
+            model=model_name,
+            prompt_version=TRIAGE_PROMPT_VERSION,
+        )
+        _write_vision_cache(classify_cache, classify.to_dict())
+        _write_vision_cache(triage_cache, triage.raw or triage.to_dict())
+    if metrics is not None:
+        metrics.add_stage("combined", seconds=time.time() - t0, api_calls=1)
+    return classify, triage
+
+
+def classify_and_triage_figure_image(
+    image: np.ndarray | str | Path,
+    *,
+    caption: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    model: str | None = None,
+    http_post: HttpPost | None = None,
+    use_cache: bool | None = None,
+    max_side: int | None = None,
+    metrics: Any | None = None,
+) -> tuple[XrdClassifyResult, FigureTriageResult]:
+    """Classify XRD + triage digitization in one call (or cache hit)."""
+    return call_openai_classify_and_triage(
+        _load_bgr_image(image),
+        caption=caption,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        http_post=http_post,
+        use_cache=use_cache,
+        max_side=max_side,
+        metrics=metrics,
     )
 
 

@@ -22,6 +22,7 @@ from figure_analysis.schemas import (
     PaperAnalysis,
     XrdCurve,
 )
+from figure_analysis.versions import ANALYSIS_CACHE_NAME, PAPER_ANALYSIS_CACHE_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +256,7 @@ def analyze_figure_image(
     caption: Optional[str] = None,
     text: Optional[str] = None,
     figure_number: Optional[int] = None,
+    metrics=None,
 ) -> FigureAnalysisResult:
     """Run one multimodal XRD gate + metadata extraction on a cropped figure."""
     path = Path(image_path)
@@ -274,16 +276,27 @@ def analyze_figure_image(
     )
 
     t0 = time.time()
+    api_before = int(getattr(client, "api_calls", 0) or 0)
+    cache_before = int(getattr(client, "cache_hits", 0) or 0)
     logger.info("Analyzing figure (XRD gate): %s", path)
     payload = client.analyze_structured(
         prompt=prompt,
         schema_model=FigureAnalysisPayload,
         images=[path],
         cache_key=key,
-        cache_name="xrd_analysis_v7.json",
+        cache_name=ANALYSIS_CACHE_NAME,
         system=SYSTEM_PROMPT,
     )
     elapsed = time.time() - t0
+    api_delta = max(0, int(getattr(client, "api_calls", 0) or 0) - api_before)
+    cache_delta = max(0, int(getattr(client, "cache_hits", 0) or 0) - cache_before)
+    if metrics is not None:
+        metrics.add_stage(
+            "analyze",
+            seconds=elapsed,
+            api_calls=api_delta,
+            cache_hits=cache_delta,
+        )
     logger.debug(
         "Figure analysis finished in %.2fs (model=%s is_xrd=%s)",
         elapsed,
@@ -311,6 +324,7 @@ def analyze_paper(
     client=None,
     config=None,
     cache_key: Optional[str] = None,
+    metrics=None,
 ) -> PaperAnalysis:
     """Synthesize XRD findings across all figures for one paper (text-only).
 
@@ -329,6 +343,8 @@ def analyze_paper(
     prompt = build_paper_user_prompt(paper_payload)
 
     t0 = time.time()
+    api_before = int(getattr(client, "api_calls", 0) or 0)
+    cache_before = int(getattr(client, "cache_hits", 0) or 0)
     logger.info("Running paper-level XRD analysis (model=%s)", getattr(cfg, "model", None))
     # Text-only call: reuse the existing structured client with no images.
     result = client.analyze_structured(
@@ -336,10 +352,17 @@ def analyze_paper(
         schema_model=PaperAnalysis,
         images=[],
         cache_key=key,
-        cache_name="paper_analysis_v3.json",
+        cache_name=PAPER_ANALYSIS_CACHE_NAME,
         system=PAPER_SYSTEM_PROMPT,
     )
     elapsed = time.time() - t0
+    if metrics is not None:
+        metrics.add_stage(
+            "paper",
+            seconds=elapsed,
+            api_calls=max(0, int(getattr(client, "api_calls", 0) or 0) - api_before),
+            cache_hits=max(0, int(getattr(client, "cache_hits", 0) or 0) - cache_before),
+        )
     logger.debug("Paper analysis finished in %.2fs", elapsed)
 
     if not isinstance(result, PaperAnalysis):

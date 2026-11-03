@@ -306,26 +306,23 @@ class ProcessFigureXrdFilterTests(unittest.TestCase):
             http_post.assert_called_once()
 
     def test_all_figures_keeps_non_xrd_for_triage(self) -> None:
-        classify_payload = {"is_xrd": False, "reason": "schematic"}
-        triage_payload = {
+        # Without a stored classify result, digitize uses one combined vision call.
+        combined_payload = {
+            "is_xrd": False,
+            "confidence": "high",
+            "classify_reason": "schematic",
             "digitizable": False,
             "curve_count": 0,
             "curve_layout": "not_applicable",
             "needs_clipdrop": False,
-            "reason": "not a plot",
+            "triage_reason": "not a plot",
         }
-        responses = [classify_payload, triage_payload]
-
-        def http_post(url, headers=None, json=None, timeout=None):  # noqa: A002
-            payload = responses.pop(0)
-            response = MagicMock()
-            response.raise_for_status = MagicMock()
-            response.json.return_value = {
-                "choices": [
-                    {"message": {"content": __import__("json").dumps(payload)}}
-                ]
-            }
-            return response
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json.return_value = {
+            "choices": [{"message": {"content": json.dumps(combined_payload)}}]
+        }
+        http_post = MagicMock(return_value=response)
 
         with tempfile.TemporaryDirectory() as tmp:
             figures = Path(tmp) / "figures"
@@ -345,10 +342,12 @@ class ProcessFigureXrdFilterTests(unittest.TestCase):
 
             self.assertEqual(entry["status"], "skipped_not_digitizable")
             self.assertFalse(entry["xrd_classification"]["is_xrd"])
+            self.assertTrue(entry.get("classify_triage_combined"))
             self.assertTrue((figures / "fig_schema" / "fig_schema.png").is_file())
             self.assertTrue(
                 (figures / "fig_schema" / "fig_schema.xrd_classify.json").is_file()
             )
+            http_post.assert_called_once()
 
 
 class RearrangeOutputsTests(unittest.TestCase):

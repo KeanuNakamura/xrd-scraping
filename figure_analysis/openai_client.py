@@ -7,6 +7,7 @@ import copy
 import io
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional, Type, TypeVar
@@ -14,7 +15,13 @@ from typing import Any, Optional, Type, TypeVar
 import numpy as np
 from PIL import Image
 from pydantic import BaseModel, ValidationError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from figure_analysis.config import Config
 
@@ -27,6 +34,14 @@ class OpenAIClientError(RuntimeError):
     pass
 
 
+def _is_rate_limit_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    if "rate limit" in text or "429" in text:
+        return True
+    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    return status == 429
+
+
 class OpenAIVisionClient:
     """Thin wrapper around the OpenAI Responses API for vision + JSON schema."""
 
@@ -35,16 +50,20 @@ class OpenAIVisionClient:
         self.api_calls = 0
         self.cache_hits = 0
         self._client = None
+        self._stats_lock = threading.Lock()
+        self._client_lock = threading.Lock()
 
     def _get_client(self):
         if self._client is None:
-            self.config.require_api_key()
-            from openai import OpenAI
+            with self._client_lock:
+                if self._client is None:
+                    self.config.require_api_key()
+                    from openai import OpenAI
 
-            self._client = OpenAI(
-                api_key=self.config.openai_api_key,
-                timeout=self.config.request_timeout_s,
-            )
+                    self._client = OpenAI(
+                        api_key=self.config.openai_api_key,
+                        timeout=self.config.request_timeout_s,
+                    )
         return self._client
 
     def _cache_path(self, key: str) -> Path:
@@ -57,7 +76,8 @@ class OpenAIVisionClient:
             return None
         path = self._cache_path(key) / name
         if path.exists():
-            self.cache_hits += 1
+            with self._stats_lock:
+                self.cache_hits += 1
             logger.info("Cache hit: %s/%s", key, name)
             return json.loads(path.read_text())
         return None
@@ -144,9 +164,12 @@ class OpenAIVisionClient:
 
     @retry(
         reraise=True,
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=20),
-        retry=retry_if_exception_type((OpenAIClientError, TimeoutError, ConnectionError)),
+        stop=stop_after_attempt(4),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=(
+            retry_if_exception_type((OpenAIClientError, TimeoutError, ConnectionError))
+            | retry_if_exception(_is_rate_limit_error)
+        ),
     )
     def _call_with_retries(
         self,
@@ -186,7 +209,9 @@ class OpenAIVisionClient:
             )
         body_input.append({"role": "user", "content": content})
 
-        self.api_calls += 1
+        with self._stats_lock:
+            self.api_calls += 1
+            call_no = self.api_calls
         t0 = time.time()
         temperature = float(getattr(self.config, "temperature", 0.0))
         try:
@@ -204,6 +229,8 @@ class OpenAIVisionClient:
                 },
             )
         except Exception as exc:
+            if _is_rate_limit_error(exc):
+                raise OpenAIClientError(str(exc)) from exc
             logger.error("OpenAI strict schema request failed: %s", exc)
             # Fallback: json_object mode (requires 'json' in input — already ensured)
             try:
@@ -217,7 +244,7 @@ class OpenAIVisionClient:
                 raise OpenAIClientError(str(exc2)) from exc2
 
         elapsed = time.time() - t0
-        logger.info("OpenAI call #%d completed in %.1fs", self.api_calls, elapsed)
+        logger.info("OpenAI call #%d completed in %.1fs", call_no, elapsed)
         text = _extract_output_text(response)
         try:
             return json.loads(text)

@@ -189,7 +189,9 @@ class TwoTierEnrichTests(unittest.TestCase):
 
             with patch.object(sad, "classify_xrd_figure_image", side_effect=fake_classify):
                 with patch.object(sad, "analyze_figure_image", side_effect=fake_analyze):
-                    sad.enrich_figure_analysis_json(paper, client=object())
+                    sad.enrich_figure_analysis_json(
+                        paper, client=object(), workers=1, overwrite=True
+                    )
 
             self.assertEqual(sorted(classify_calls), ["fig_map.png", "fig_xrd.png"])
             self.assertEqual(analyze_calls, ["fig_xrd.png"])
@@ -198,10 +200,12 @@ class TwoTierEnrichTests(unittest.TestCase):
             self.assertEqual(data["xrd_figures"], 1)
             self.assertEqual(len(data["figures"]), 1)
             self.assertTrue(data["figures"][0]["is_xrd"])
-            self.assertIn("xrd_classification", data["figures"][0])
+            self.assertNotIn("xrd_classification", data["figures"][0])
+            self.assertIn("enrichment_meta", data["figures"][0])
             self.assertNotIn("paper_analysis", data)
             self.assertTrue((paper / "non_xrd_figures" / "fig_map.png").is_file())
             self.assertTrue((paper / "xrd_figures" / "fig_xrd.png").is_file())
+            self.assertTrue((paper / "enrichment_metrics.json").is_file())
 
     def test_uncertain_non_xrd_guess_still_gets_full_analysis(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -246,7 +250,9 @@ class TwoTierEnrichTests(unittest.TestCase):
 
             with patch.object(sad, "classify_xrd_figure_image", side_effect=fake_classify):
                 with patch.object(sad, "analyze_figure_image", side_effect=fake_analyze):
-                    sad.enrich_figure_analysis_json(paper, client=object())
+                    sad.enrich_figure_analysis_json(
+                        paper, client=object(), workers=1, overwrite=True
+                    )
 
             self.assertEqual(analyze_calls, ["fig_weird.png"])
             data = json.loads(fa.read_text(encoding="utf-8"))
@@ -304,7 +310,11 @@ class TwoTierEnrichTests(unittest.TestCase):
                         side_effect=fake_paper,
                     ):
                         sad.enrich_figure_analysis_json(
-                            paper, client=object(), run_paper_analysis=True
+                            paper,
+                            client=object(),
+                            run_paper_analysis=True,
+                            workers=1,
+                            overwrite=True,
                         )
 
             self.assertEqual(paper_calls["n"], 1)
@@ -341,11 +351,6 @@ class DigitizeReuseClassifyTests(unittest.TestCase):
                                 "figure_id": "fig_1",
                                 "figure_path": str(src),
                                 "is_xrd": True,
-                                "xrd_classification": {
-                                    "is_xrd": True,
-                                    "confidence": "high",
-                                    "reason": "from enrich",
-                                },
                                 "analysis": {"sample": "x", "curves": []},
                             }
                         ],
@@ -366,7 +371,11 @@ class DigitizeReuseClassifyTests(unittest.TestCase):
                 )
 
             self.assertTrue(entry.get("xrd_classification_reused"))
-            self.assertEqual(entry["xrd_classification"]["reason"], "from enrich")
+            self.assertTrue(entry["xrd_classification"]["is_xrd"])
+            self.assertEqual(
+                entry["xrd_classification"]["reason"],
+                "reused from figure_analysis.is_xrd",
+            )
             # Only triage should hit the network (classify reused).
             self.assertEqual(http_post.call_count, 1)
             body = http_post.call_args.kwargs["json"]
@@ -502,11 +511,6 @@ def test_lookup_stored_classification(tmp_path: Path):
                         "figure_id": "fig_9",
                         "figure_path": str(png),
                         "is_xrd": True,
-                        "xrd_classification": {
-                            "is_xrd": True,
-                            "confidence": "high",
-                            "reason": "stored",
-                        },
                     }
                 ]
             }
@@ -518,7 +522,7 @@ def test_lookup_stored_classification(tmp_path: Path):
     )
     assert found is not None
     assert found.is_xrd is True
-    assert found.reason == "stored"
+    assert found.reason == "reused from figure_analysis.is_xrd"
 
 
 if __name__ == "__main__":
